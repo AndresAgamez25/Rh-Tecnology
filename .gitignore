@@ -1,0 +1,14 @@
+# Configuración real con claves: NUNCA se sube al repositorio
+js/config.js
+.env
+.env.*
+
+# Archivos temporales de Supabase CLI
+supabase/.temp/
+supabase/.branches/
+
+# Sistema / editores
+.DS_Store
+Thumbs.db
+.vscode/
+node_modules/

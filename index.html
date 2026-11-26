@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <!-- viewport-fit=cover permite usar toda la pantalla del iPhone (con notch) -->
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="description" content="Lista de productos faltantes de RH TECHNOLOGY, Corozal (Sucre).">
+  <meta name="theme-color" content="#0b0d12">
+  <meta name="color-scheme" content="dark">
+  <title>RH Faltantes</title>
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+  <!-- ───────── Encabezado ───────── -->
+  <header class="encabezado">
+    <div class="marca">
+      <span class="marca-logo" aria-hidden="true">RH</span>
+      <div>
+        <h1 class="marca-nombre">RH TECHNOLOGY</h1>
+        <p class="marca-sub">Faltantes · Corozal, Sucre</p>
+      </div>
+    </div>
+    <button type="button" id="btn-reiniciar" class="btn btn-peligro-suave">
+      Reiniciar lista
+    </button>
+  </header>
+
+  <!-- ───────── Pestañas de categorías (se llenan desde JS) ───────── -->
+  <nav class="pestanas" id="pestanas" role="tablist" aria-label="Categorías"></nav>
+
+  <!-- ───────── Lista de faltantes ───────── -->
+  <main id="lista" class="lista" role="tabpanel" aria-live="polite"></main>
+
+  <!-- ───────── Barra inferior para enviar ───────── -->
+  <form id="barra" class="barra" autocomplete="off">
+    <button type="button" id="btn-audio" class="btn-icono" aria-label="Grabar audio">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15a3 3 0 0 0 3-3V6a3 3 0 1 0-6 0v6a3 3 0 0 0 3 3Zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.92V21h2v-2.08A7 7 0 0 0 19 12h-2Z"/></svg>
+    </button>
+
+    <!-- El input de archivo va oculto; el <label> funciona como botón -->
+    <label class="btn-icono" for="input-foto" aria-label="Tomar foto">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 3 7.17 5H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-3.17L15 3H9Zm3 15a5 5 0 1 1 0-10 5 5 0 0 1 0 10Zm0-2a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z"/></svg>
+    </label>
+    <input type="file" id="input-foto" accept="image/*" capture="environment" hidden>
+
+    <label for="texto" class="solo-lectores">¿Qué falta?</label>
+    <textarea id="texto" class="barra-texto" rows="1" enterkeyhint="send"
+              placeholder="¿Qué falta?"></textarea>
+
+    <button type="submit" id="btn-enviar" class="btn-icono btn-enviar" aria-label="Enviar">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.4 20.4 21 12 3.4 3.6 3.4 10l12.6 2-12.6 2z"/></svg>
+    </button>
+  </form>
+
+  <!-- ───────── Modal de confirmación propio (no usamos confirm()) ───────── -->
+  <dialog id="modal" class="modal" aria-labelledby="modal-titulo" aria-describedby="modal-mensaje">
+    <form method="dialog" class="modal-caja">
+      <h2 id="modal-titulo" class="modal-titulo"></h2>
+      <p id="modal-mensaje" class="modal-mensaje"></p>
+      <div class="modal-botones">
+        <button value="cancelar" class="btn btn-secundario" autofocus>Cancelar</button>
+        <button value="aceptar" class="btn btn-peligro" id="modal-aceptar">Aceptar</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Mensajes cortos (toasts). aria-live hace que los lectores de pantalla los lean -->
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>

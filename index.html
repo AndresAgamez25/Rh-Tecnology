@@ -10,14 +10,46 @@
   <title>RH Faltantes</title>
   <link rel="stylesheet" href="css/styles.css">
 </head>
-<body>
+<body data-vista="cargando">
+  <!-- ───────── Pantalla de carga ───────── -->
+  <div class="vista vista-cargando" aria-label="Cargando">
+    <span class="marca-logo marca-logo-grande" aria-hidden="true">RH</span>
+  </div>
+
+  <!-- ───────── Pantalla de login ───────── -->
+  <section class="vista vista-login" aria-labelledby="login-titulo">
+    <form id="form-login" class="login-caja" novalidate>
+      <span class="marca-logo marca-logo-grande" aria-hidden="true">RH</span>
+      <h1 id="login-titulo" class="login-titulo">RH TECHNOLOGY</h1>
+      <p class="login-sub">Lista de faltantes · Corozal, Sucre</p>
+
+      <label class="campo">
+        <span>Correo</span>
+        <input type="email" id="login-email" autocomplete="username" inputmode="email"
+               autocapitalize="none" spellcheck="false" required>
+      </label>
+      <label class="campo">
+        <span>Contraseña</span>
+        <input type="password" id="login-password" autocomplete="current-password" required>
+      </label>
+
+      <p id="login-error" class="login-error" role="alert"></p>
+      <button type="submit" id="btn-login" class="btn btn-principal">Entrar</button>
+    </form>
+  </section>
+
+  <!-- ───────── App ───────── -->
+  <div class="vista vista-app">
   <!-- ───────── Encabezado ───────── -->
   <header class="encabezado">
     <div class="marca">
       <span class="marca-logo" aria-hidden="true">RH</span>
       <div>
         <h1 class="marca-nombre">RH TECHNOLOGY</h1>
-        <p class="marca-sub">Faltantes · Corozal, Sucre</p>
+        <p class="marca-sub">
+          <span id="usuario-nombre">Corozal, Sucre</span>
+          <button type="button" id="btn-salir" class="btn-enlace" hidden>· Salir</button>
+        </p>
       </div>
     </div>
     <button type="button" id="btn-reiniciar" class="btn btn-peligro-suave">
@@ -51,6 +83,7 @@
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.4 20.4 21 12 3.4 3.6 3.4 10l12.6 2-12.6 2z"/></svg>
     </button>
   </form>
+  </div>
 
   <!-- ───────── Modal de confirmación propio (no usamos confirm()) ───────── -->
   <dialog id="modal" class="modal" aria-labelledby="modal-titulo" aria-describedby="modal-mensaje">

@@ -61,6 +61,16 @@ svg { width: 22px; height: 22px; fill: currentColor; }
   overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
 }
 
+/* Vistas: solo se muestra la que indica <body data-vista="..."> */
+.vista { display: none; }
+body[data-vista="cargando"] .vista-cargando,
+body[data-vista="login"] .vista-login { display: grid; }
+body[data-vista="app"] .vista-app { display: block; }
+
+.vista-cargando { min-height: 100dvh; place-items: center; }
+.vista-cargando .marca-logo { animation: latir 1.2s ease-in-out infinite; }
+@keyframes latir { 50% { opacity: 0.5; transform: scale(0.94); } }
+
 /* 3. Botones --------------------------------------------------- */
 .btn {
   border: 1px solid transparent;
@@ -73,6 +83,12 @@ svg { width: 22px; height: 22px; fill: currentColor; }
 }
 .btn:active { transform: scale(0.97); }
 .btn-secundario { background: var(--superficie-2); border-color: var(--borde); }
+.btn-principal { background: var(--acento); color: var(--acento-texto); }
+.btn-principal:disabled { opacity: 0.6; }
+.btn-enlace {
+  padding: 0; border: 0; background: none;
+  color: var(--acento); font-size: inherit; font-weight: 600;
+}
 .btn-peligro { background: var(--peligro); color: #1a0505; }
 .btn-peligro-suave {
   background: transparent;
@@ -127,6 +143,38 @@ svg { width: 22px; height: 22px; fill: currentColor; }
 }
 .marca-nombre { margin: 0; font-size: 17px; font-weight: 800; letter-spacing: 0.3px; }
 .marca-sub { margin: 0; font-size: 12px; color: var(--texto-suave); }
+
+/* Login ------------------------------------------------------- */
+.vista-login {
+  min-height: 100dvh;
+  place-items: center;
+  padding: calc(24px + var(--seguro-arriba)) calc(var(--margen-x) + var(--seguro-der))
+           calc(24px + var(--seguro-abajo)) calc(var(--margen-x) + var(--seguro-izq));
+}
+.login-caja {
+  display: grid;
+  gap: 14px;
+  width: min(100%, 360px);
+  justify-items: center;
+  text-align: center;
+}
+.marca-logo-grande { width: 64px; height: 64px; border-radius: 18px; font-size: 24px; }
+.login-titulo { margin: 4px 0 0; font-size: 24px; letter-spacing: 0.4px; }
+.login-sub { margin: -8px 0 8px; color: var(--texto-suave); }
+.campo { display: grid; gap: 6px; width: 100%; text-align: left; font-size: 14px; color: var(--texto-suave); }
+.campo input {
+  width: 100%;
+  min-height: 48px;
+  padding: 0 14px;
+  border: 1px solid var(--borde);
+  border-radius: 12px;
+  background: var(--superficie);
+  color: var(--texto);
+  font-size: 16px;
+}
+.campo input:focus { border-color: var(--acento); outline: none; }
+.login-error { min-height: 1.4em; margin: 0; color: var(--peligro); font-size: 14px; }
+.login-caja .btn-principal { width: 100%; min-height: 48px; font-size: 16px; border-radius: 12px; }
 
 /* 5. Pestañas -------------------------------------------------- */
 .pestanas {

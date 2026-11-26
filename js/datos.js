@@ -1,97 +1,41 @@
 // ─────────────────────────────────────────────────────────────
-// CAPA DE DATOS — versión de prueba (Fase 1)
-// Guarda la lista en localStorage del navegador.
-// En la Fase 2 este archivo se reemplaza por Supabase, pero las
-// funciones exportadas (listar, agregar, quitar, vaciar, suscribir)
-// serán las mismas, así el resto de la app no cambia.
+// DATOS — "fachada"
+// La app siempre importa este archivo. Por dentro decide si usar el
+// modo demo (localStorage) o Supabase. Así app.js no se entera de
+// dónde vienen los datos: solo llama a agregar(), quitar(), etc.
 // ─────────────────────────────────────────────────────────────
 
-const CLAVE = 'rh-faltantes-demo';
+let fuente = null;
 const oyentes = new Set();
-let items = cargar();
+let desuscribir = null;
 
-function nuevoId() {
-  // crypto.randomUUID solo existe en contextos seguros (https o localhost)
-  return globalThis.crypto?.randomUUID?.() ?? `id-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+/** modo: 'demo' | 'supabase' */
+export async function usar(modo) {
+  await detener();
+  fuente = modo === 'supabase'
+    ? await import('./datos-supabase.js')
+    : await import('./datos-demo.js');
+  desuscribir = fuente.suscribir((items) => oyentes.forEach((fn) => fn(items)));
+  await fuente.iniciar?.();
 }
 
-function haceMinutos(min) {
-  return new Date(Date.now() - min * 60_000).toISOString();
+export async function detener() {
+  desuscribir?.();
+  desuscribir = null;
+  await fuente?.detener?.();
+  fuente = null;
 }
 
-function semilla() {
-  return [
-    { categoria: 'forros', subtipo: 'silicona', modelo: 'Redmi A7 Pro', detalle: '', quedan: 'azul y negro', creado_por: 'Jefe 1', creado_en: haceMinutos(12) },
-    { categoria: 'forros', subtipo: 'lujo', modelo: 'iPhone 15 Pro Max', detalle: 'con MagSafe', quedan: '', creado_por: 'Tú', creado_en: haceMinutos(95) },
-    { categoria: 'vidrios', subtipo: 'blindado', modelo: 'Galaxy A15', detalle: '', quedan: '', creado_por: 'Tú', creado_en: haceMinutos(30) },
-    { categoria: 'vidrios', subtipo: 'antiespia', modelo: 'iPhone 13', detalle: '', quedan: '2 unidades', creado_por: 'Jefe 2', creado_en: haceMinutos(300) },
-    { categoria: 'cables', subtipo: null, modelo: 'Samsung', detalle: 'USB-C · carga rápida · 1 m', quedan: '', creado_por: 'Tú', creado_en: haceMinutos(60 * 26) },
-    { categoria: 'audifonos', subtipo: 'inalambricos', modelo: 'Buds genéricos', detalle: '', quedan: 'solo blancos', creado_por: 'Jefe 1', creado_en: haceMinutos(5) },
-    { categoria: 'otros', subtipo: null, modelo: 'Memoria 64GB', detalle: 'micro SD', quedan: '', creado_por: 'Tú', creado_en: haceMinutos(45) },
-  ].map((it) => ({ id: nuevoId(), ...it }));
+function fuenteActual() {
+  if (!fuente) throw new Error('Los datos aún no están listos');
+  return fuente;
 }
 
-function cargar() {
-  try {
-    const guardado = localStorage.getItem(CLAVE);
-    if (guardado) return JSON.parse(guardado);
-  } catch { /* modo privado o almacenamiento bloqueado: usamos la semilla */ }
-  return semilla();
-}
+export const listar = () => fuenteActual().listar();
+export const agregar = (productos) => fuenteActual().agregar(productos);
+export const quitar = (ids) => fuenteActual().quitar(ids);
+export const vaciar = () => fuenteActual().vaciar();
 
-function guardar() {
-  try { localStorage.setItem(CLAVE, JSON.stringify(items)); } catch { /* sin almacenamiento */ }
-}
-
-function avisar() {
-  const copia = [...items];
-  oyentes.forEach((fn) => fn(copia));
-}
-
-function cambiar(nuevos) {
-  items = nuevos;
-  guardar();
-  avisar();
-}
-
-// "Simulador" de tiempo real: si abres la app en dos pestañas,
-// el evento "storage" avisa a la otra pestaña del cambio.
-window.addEventListener('storage', (e) => {
-  if (e.key === CLAVE) { items = cargar(); avisar(); }
-});
-
-// ── API pública ──────────────────────────────────────────────
-
-export async function listar() {
-  return [...items];
-}
-
-/** Agrega uno o varios productos. */
-export async function agregar(productos, autor = 'Tú') {
-  const nuevos = productos.map((p) => ({
-    id: nuevoId(),
-    categoria: p.categoria,
-    subtipo: p.subtipo ?? null,
-    modelo: p.modelo ?? '',
-    detalle: p.detalle ?? '',
-    quedan: p.quedan ?? '',
-    creado_en: new Date().toISOString(),
-    creado_por: autor,
-  }));
-  cambiar([...items, ...nuevos]);
-}
-
-/** Quita uno o varios productos por id. */
-export async function quitar(ids) {
-  const fuera = new Set(ids);
-  cambiar(items.filter((it) => !fuera.has(it.id)));
-}
-
-export async function vaciar() {
-  cambiar([]);
-}
-
-/** Escucha cambios. Devuelve una función para dejar de escuchar. */
 export function suscribir(fn) {
   oyentes.add(fn);
   return () => oyentes.delete(fn);

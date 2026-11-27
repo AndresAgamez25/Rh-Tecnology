@@ -6,6 +6,8 @@ import { clasificar } from './clasificador.js';
 import { normalizarClasificacion } from './categorias.js';
 import { cargarConfig, crearCliente } from './supabase.js';
 import * as auth from './auth.js';
+import { procesarConIA, configurarIA } from './ia.js';
+import * as media from './media.js';
 import * as ui from './ui.js';
 
 const $ = (id) => document.getElementById(id);
@@ -27,6 +29,8 @@ const elementos = {
   btnLogin: $('btn-login'),
   terminar: $('btn-terminar'),
   progreso: $('compras-progreso'),
+  cancelarAudio: $('btn-cancelar-audio'),
+  fotoBoton: $('btn-foto'),
   barraProgreso: $('compras-barra'),
 };
 
@@ -35,6 +39,8 @@ const estado = {
   items: [],
   pestana: leerPestana(),
   enviando: false,
+  modo: 'demo',      // 'demo' | 'supabase' (con IA)
+  grabacion: null,   // grabación de audio en curso
   // Modo compras: momento en que empezó la salida (null = no estamos comprando)
   comprasDesde: leerCompras(),
 };
@@ -173,32 +179,64 @@ async function aplicarAcciones(acciones) {
   return true;
 }
 
-async function procesarTexto(texto) {
-  // Fase 3: aquí primero intentaremos con la IA, y si falla, el respaldo.
-  const { acciones, respuesta } = clasificar(texto, estado.items);
+/**
+ * Interpreta un mensaje: primero con la IA (Gemini) y, si falla,
+ * con el clasificador de respaldo (solo posible si hay texto).
+ */
+async function interpretar(entrada) {
+  if (estado.modo === 'supabase') {
+    try {
+      return { ...(await procesarConIA(entrada)), conIA: true };
+    } catch (error) {
+      console.warn('La IA falló; uso el respaldo:', error);
+      if (!entrada.texto) throw new Error('sin-respaldo');
+    }
+  }
+  return { ...clasificar(entrada.texto, estado.items), conIA: false };
+}
+
+/** Procesa texto, audio o foto y aplica las acciones. */
+async function procesarMensaje(entrada) {
+  const { acciones, respuesta, transcripcion, conIA } = await interpretar(entrada);
   const aplicado = await aplicarAcciones(acciones);
-  return { aplicado, respuesta: aplicado ? respuesta : 'No se vació la lista.' };
+  if (!aplicado) return { aplicado, mensaje: 'No se vació la lista.' };
+
+  let mensaje = respuesta;
+  if (transcripcion && entrada.audio) mensaje = `🎙️ «${transcripcion}» → ${respuesta}`;
+  if (!conIA && estado.modo === 'supabase') mensaje += ' (sin IA)';
+  return { aplicado, mensaje };
+}
+
+/** Envoltura común: bloquea la barra mientras se procesa y muestra el resultado. */
+async function ejecutar(entrada, { limpiarTexto = false } = {}) {
+  if (estado.enviando) return;
+  ponerEnviando(true);
+  try {
+    const { aplicado, mensaje } = await procesarMensaje(entrada);
+    if (aplicado && limpiarTexto) {
+      elementos.texto.value = '';
+      ajustarAltura();
+    }
+    ui.toast(mensaje, 4500);
+  } catch (error) {
+    console.error(error);
+    ui.toast(error.message === 'sin-respaldo'
+      ? 'La IA no respondió. Intenta de nuevo o escríbelo.'
+      : 'Algo salió mal. Intenta de nuevo.');
+  } finally {
+    ponerEnviando(false);
+  }
 }
 
 async function enviar(evento) {
   evento?.preventDefault();
-  const texto = elementos.texto.value.trim();
-  if (!texto || estado.enviando) return;
-
-  ponerEnviando(true);
-  try {
-    const { aplicado, respuesta } = await procesarTexto(texto);
-    if (aplicado) {
-      elementos.texto.value = '';
-      ajustarAltura();
-    }
-    ui.toast(respuesta);
-  } catch (error) {
-    console.error(error);
-    ui.toast('Algo salió mal. Intenta de nuevo.');
-  } finally {
-    ponerEnviando(false);
+  if (estado.grabacion) {
+    await terminarGrabacion();
+    return;
   }
+  const texto = elementos.texto.value.trim();
+  if (!texto) return;
+  await ejecutar({ texto }, { limpiarTexto: true });
 }
 
 async function marcarLlego(item, nodo) {
@@ -256,11 +294,93 @@ elementos.barra.addEventListener('submit', enviar);
 elementos.reiniciar.addEventListener('click', reiniciarLista);
 elementos.terminar.addEventListener('click', terminarCompras);
 
-// Audio y foto llegan en la Fase 4
-elementos.audio.addEventListener('click', () => ui.toast('🎙️ El audio llega en la Fase 4.'));
-elementos.foto.addEventListener('change', () => {
+// ── Audio ────────────────────────────────────────────────────
+
+function necesitaIA(que) {
+  if (estado.modo === 'supabase') return false;
+  ui.toast(`${que} necesita la IA: inicia sesión (en modo demo solo funciona el texto).`);
+  return true;
+}
+
+function ponerGrabando(si) {
+  document.body.classList.toggle('grabando', si);
+  elementos.audio.setAttribute('aria-label', si ? 'Detener y enviar audio' : 'Grabar audio');
+  elementos.cancelarAudio.hidden = !si;
+  elementos.texto.disabled = si;
+  elementos.texto.placeholder = si ? '🔴 Grabando… 0:00' : '¿Qué falta?';
+}
+
+async function alternarGrabacion() {
+  if (estado.grabacion) {
+    await terminarGrabacion();
+    return;
+  }
+  if (estado.enviando || necesitaIA('El audio')) return;
+  if (!media.puedeGrabar()) {
+    ui.toast('Este navegador no permite grabar audio.');
+    return;
+  }
+  try {
+    estado.grabacion = await media.empezarGrabacion({
+      onTick: (seg) => {
+        elementos.texto.placeholder = `🔴 Grabando… ${Math.floor(seg / 60)}:${String(seg % 60).padStart(2, '0')}`;
+      },
+      onLimite: () => terminarGrabacion(),
+    });
+    ponerGrabando(true);
+  } catch (error) {
+    console.error(error);
+    ui.toast(error.name === 'NotAllowedError'
+      ? 'Permite el micrófono para grabar (Ajustes → Safari → Micrófono).'
+      : 'No se pudo usar el micrófono.');
+  }
+}
+
+async function terminarGrabacion() {
+  const grabacion = estado.grabacion;
+  if (!grabacion) return;
+  estado.grabacion = null;
+  ponerGrabando(false);
+  try {
+    const audio = await grabacion.detener();
+    const texto = elementos.texto.value.trim();
+    await ejecutar({ audio: { base64: audio.base64, mime: audio.mime }, ...(texto && { texto }) },
+      { limpiarTexto: true });
+  } catch (error) {
+    console.error(error);
+    ui.toast('El audio salió vacío. Intenta de nuevo.');
+  }
+}
+
+function cancelarGrabacion() {
+  estado.grabacion?.cancelar();
+  estado.grabacion = null;
+  ponerGrabando(false);
+  ui.toast('Audio cancelado.');
+}
+
+elementos.audio.addEventListener('click', alternarGrabacion);
+elementos.cancelarAudio.addEventListener('click', cancelarGrabacion);
+
+// ── Foto ─────────────────────────────────────────────────────
+
+elementos.fotoBoton.addEventListener('click', (e) => {
+  if (estado.enviando || estado.grabacion || necesitaIA('La foto')) e.preventDefault();
+});
+
+elementos.foto.addEventListener('change', async () => {
+  const archivo = elementos.foto.files?.[0];
   elementos.foto.value = '';
-  ui.toast('📷 La foto llega en la Fase 4.');
+  if (!archivo) return;
+  try {
+    ui.toast('📷 Analizando la foto…', 8000);
+    const imagen = await media.prepararFoto(archivo);
+    const texto = elementos.texto.value.trim(); // el texto escrito sirve de contexto
+    await ejecutar({ imagen, ...(texto && { texto }) }, { limpiarTexto: true });
+  } catch (error) {
+    console.error(error);
+    ui.toast('No se pudo leer la foto.');
+  }
 });
 
 // ── Vistas y sesión ──────────────────────────────────────────
@@ -320,6 +440,7 @@ async function alCambiarUsuario(usuario) {
     elementos.usuario.textContent = `Hola, ${nombre}`;
     elementos.salir.hidden = false;
     await datos.usar('supabase');
+    estado.modo = 'supabase';
     estado.items = await datos.listar();
     render();
     mostrarVista('app');
@@ -333,6 +454,7 @@ async function alCambiarUsuario(usuario) {
 async function iniciarModoDemo() {
   elementos.usuario.textContent = 'Modo demo · datos de prueba';
   await datos.usar('demo');
+  estado.modo = 'demo';
   estado.items = await datos.listar();
   render();
   mostrarVista('app');
@@ -354,6 +476,7 @@ async function iniciar() {
     return;
   }
 
+  configurarIA(config.FUNCION_IA);
   try {
     await crearCliente(config);
   } catch (error) {

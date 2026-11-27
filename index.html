@@ -80,7 +80,11 @@
     </button>
 
     <!-- El input de archivo va oculto; el <label> funciona como botón -->
-    <label class="btn-icono" for="input-foto" aria-label="Tomar foto">
+    <button type="button" id="btn-cancelar-audio" class="btn-icono btn-cancelar" aria-label="Cancelar audio" hidden>
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18.3 5.7 12 12l6.3 6.3-1.4 1.4L10.6 13.4 4.3 19.7 2.9 18.3 9.2 12 2.9 5.7 4.3 4.3l6.3 6.3 6.3-6.3z"/></svg>
+    </button>
+
+    <label class="btn-icono" for="input-foto" id="btn-foto" aria-label="Tomar foto">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 3 7.17 5H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-3.17L15 3H9Zm3 15a5 5 0 1 1 0-10 5 5 0 0 1 0 10Zm0-2a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z"/></svg>
     </label>
     <input type="file" id="input-foto" accept="image/*" capture="environment" hidden>

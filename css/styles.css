@@ -423,6 +423,20 @@ body[data-modo="compras"] .lista { padding-bottom: calc(32px + var(--seguro-abaj
 }
 .barra-texto::placeholder { color: #5f6880; }
 
+/* Grabando audio: el micrófono se pone rojo y late */
+body.grabando #btn-audio {
+  background: var(--peligro);
+  color: #1a0505;
+  animation: halo 1.2s ease-out infinite;
+}
+@keyframes halo {
+  from { box-shadow: 0 0 0 0 rgb(248 113 113 / 0.6); }
+  to { box-shadow: 0 0 0 12px rgb(248 113 113 / 0); }
+}
+body.grabando #btn-foto { display: none; }
+body.grabando .barra-texto::placeholder { color: var(--peligro); }
+.btn-cancelar[hidden] { display: none; }
+
 /* 9. Modal ----------------------------------------------------- */
 .modal {
   width: min(92vw, 380px);

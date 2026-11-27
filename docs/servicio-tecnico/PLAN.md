@@ -45,6 +45,16 @@ Búsqueda por nombre, teléfono, IMEI o número de orden.
   total, abono, saldo y número de orden.
 - **Sin garantía** (se quitó). Si a un trabajo se le da, se anota en el historial.
 
+## Fotos
+- Se guardan **1 mes** y luego **se borran solas** (el texto de la orden queda para siempre).
+  En la ficha se ve la fecha de borrado; en Entregados queda la nota "se borraron solas el …".
+- **Al marcar listo, el cliente recibe las fotos**: el WhatsApp lleva un **enlace privado** a una página
+  sencilla (logo, "Lo que encontramos" con fotos, "Lo que se hizo" con fotos y pasos, total/abono/saldo).
+  Se elige qué fotos ve el cliente. La página no muestra claves ni otros datos y deja de funcionar en
+  1 mes. Botón extra "Compartir las fotos sueltas" (menú de compartir del celular → WhatsApp Business).
+- Nota técnica: abrir WhatsApp con el mensaje escrito (opción 1) no permite adjuntar archivos; por eso
+  el enlace. Fotos reducidas (~100-150 KB) para que 1 GB gratis alcance con margen.
+
 ## WhatsApp: opción 1 (gratis)
 El WhatsApp Business del negocio está en otro teléfono. Se **vincula como dispositivo acompañante**
 en los celulares que usan la app (WhatsApp Business → ⋮ → "Vincular como dispositivo acompañante";

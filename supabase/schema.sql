@@ -137,8 +137,15 @@ create policy "quitar faltantes" on public.faltantes
   for delete to authenticated
   using ( (select public.es_permitido()) );
 
--- Quitamos cualquier permiso al rol anónimo (sin sesión)
-revoke all on public.faltantes from anon;
+-- Permisos EXPLÍCITOS (no dependemos de los automáticos de Supabase,
+-- que no siempre se aplican igual):
+--   anónimo (sin sesión) → nada
+--   con sesión           → leer, agregar y quitar (RLS decide QUÉ filas);
+--                          el UPDATE solo de la columna estado (sección 7)
+--   Sin TRUNCATE: vaciaría la tabla saltándose RLS.
+revoke all on public.faltantes from anon, authenticated;
+grant select, insert, delete on public.faltantes to authenticated;
+revoke all on public.usuarios_permitidos from anon, authenticated;
 
 
 -- ─────────────────────────────────────────────────────────────

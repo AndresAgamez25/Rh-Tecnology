@@ -6,10 +6,12 @@
 
 /* 1. Variables de diseño (tokens) ------------------------------ */
 :root {
-  /* Colores del logo RH TECNOLOGY: azul #2152B0 y celeste #1EB4EA */
-  --marca-azul: #2152b0;
+  /* Colores del logo RH TECNOLOGY: azul rey #1A4FE0 (como el aviso de la tienda),
+     azul brillante #1F86FF y celeste #1EB4EA */
+  --marca-azul: #1a4fe0;
+  --marca-brillante: #1f86ff;
   --marca-celeste: #1eb4ea;
-  --degradado: linear-gradient(135deg, #2a63d4 0%, #1eb4ea 100%);
+  --degradado: linear-gradient(135deg, #1a4fe0 0%, #1f86ff 55%, #1eb4ea 100%);
   --fondo: #070d1c;
   --superficie: #0f1a33;
   --superficie-2: #172649;
@@ -715,14 +717,14 @@ body[data-modo="facturas"] .lista { padding-bottom: calc(32px + var(--seguro-aba
    ═════════════════════════════════════════════════════════════ */
 body {
   background:
-    radial-gradient(120% 60% at 100% 0%, rgb(30 180 234 / 0.10), transparent 60%),
-    radial-gradient(100% 50% at 0% 100%, rgb(33 82 176 / 0.18), transparent 60%),
+    radial-gradient(120% 60% at 100% 0%, rgb(31 134 255 / 0.14), transparent 60%),
+    radial-gradient(100% 50% at 0% 100%, rgb(26 79 224 / 0.24), transparent 60%),
     var(--fondo);
   background-attachment: fixed;
 }
 
 /* Logo */
-.marca-img { width: 46px; height: auto; flex: none; filter: drop-shadow(0 2px 6px rgb(30 180 234 / 0.25)); }
+.marca-img { width: 46px; height: auto; flex: none; filter: drop-shadow(0 2px 8px rgb(31 134 255 / 0.45)); }
 .marca-nombre { letter-spacing: 0.6px; }
 .marca-celeste {
   background: var(--degradado);
@@ -742,16 +744,16 @@ body {
   border-color: transparent;
   color: #ffffff;
 }
-.btn-enviar { box-shadow: 0 4px 14px rgb(30 180 234 / 0.35); }
+.btn-enviar { box-shadow: 0 4px 16px rgb(31 134 255 / 0.45); }
 .pestana { transition: background 0.25s, color 0.25s, transform 0.15s, box-shadow 0.25s; }
 .pestana:active { transform: scale(0.95); }
-.pestana[aria-selected="true"] { box-shadow: 0 3px 12px rgb(30 180 234 / 0.35); }
+.pestana[aria-selected="true"] { box-shadow: 0 3px 14px rgb(31 134 255 / 0.45); }
 .btn, .btn-icono, .btn-llego, .btn-comprado, .btn-no-hay { transition: transform 0.12s, filter 0.2s, background 0.2s; }
 .btn:active, .btn-llego:active, .btn-comprado:active, .btn-no-hay:active { transform: scale(0.94); }
 .campo input:focus { box-shadow: 0 0 0 3px rgb(30 180 234 / 0.25); }
 .tarjeta { transition: border-color 0.2s, transform 0.15s; }
 .btn-ir-compras {
-  background: linear-gradient(135deg, rgb(33 82 176 / 0.35), rgb(30 180 234 / 0.18));
+  background: linear-gradient(135deg, rgb(26 79 224 / 0.35), rgb(30 180 234 / 0.18));
   border-color: rgb(30 180 234 / 0.45);
 }
 .btn-ir-compras-icono { display: inline-block; animation: carrito 2.6s ease-in-out infinite; }
@@ -841,3 +843,67 @@ body.grabando #btn-audio { animation: halo 1.2s ease-out infinite; }
   box-shadow: 0 4px 14px rgb(30 180 234 / 0.3);
 }
 .btn-pdf:disabled { opacity: 0.6; }
+
+
+/* ═════════════════════════════════════════════════════════════
+   14. FACTURAS | HISTORIAL
+   ═════════════════════════════════════════════════════════════ */
+.segmentos {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+  margin-top: 8px;
+  padding: 4px;
+  border: 1px solid var(--borde);
+  border-radius: 999px;
+  background: var(--superficie);
+}
+.segmento {
+  display: flex; align-items: center; justify-content: center; gap: 6px;
+  min-height: 38px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--texto-suave);
+  font-size: 14px;
+  font-weight: 700;
+  transition: background 0.25s, color 0.25s, box-shadow 0.25s;
+}
+.segmento[aria-selected="true"] { background: var(--degradado); color: #fff; box-shadow: 0 3px 12px rgb(31 134 255 / 0.4); }
+.segmento .contador { background: rgb(255 255 255 / 0.15); }
+
+.btn-borrar {
+  margin-right: auto;
+  background: transparent;
+  border: 1px solid rgb(248 113 113 / 0.45);
+  color: var(--peligro);
+  padding: 8px 14px;
+  font-size: 13px;
+}
+
+.actividad-dia { margin-top: 14px; }
+.actividad { margin: 0; padding: 0; list-style: none; display: grid; gap: 2px; }
+.actividad-linea {
+  display: grid;
+  grid-template-columns: 26px 1fr auto;
+  align-items: start;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: var(--superficie);
+  border-left: 3px solid var(--borde);
+}
+.actividad-icono { font-size: 14px; text-align: center; line-height: 1.4; color: var(--texto-suave); }
+.actividad-texto { margin: 0; font-size: 13px; line-height: 1.4; overflow-wrap: anywhere; }
+.actividad-texto strong { color: var(--texto); }
+.actividad-hora { font-size: 11px; color: var(--texto-suave); white-space: nowrap; line-height: 1.6; }
+.accion-agregar { border-left-color: var(--marca-brillante); }
+.accion-agregar .actividad-icono { color: var(--marca-brillante); font-weight: 800; }
+.accion-quitar, .accion-vaciar { border-left-color: #f59e0b; }
+.accion-quitar .actividad-icono, .accion-vaciar .actividad-icono { color: #f59e0b; font-weight: 800; }
+.accion-compra { border-left-color: var(--exito); }
+.accion-borrar_factura { border-left-color: var(--peligro); }
+.lista.entrando .actividad-linea { animation: aparecer 0.3s ease-out both; }
+.lista.entrando .actividad > :nth-child(2) { animation-delay: 0.03s; }
+.lista.entrando .actividad > :nth-child(3) { animation-delay: 0.06s; }
+.lista.entrando .actividad > :nth-child(n+4) { animation-delay: 0.09s; }

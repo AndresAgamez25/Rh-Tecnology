@@ -38,6 +38,8 @@ export const vaciar = () => fuenteActual().vaciar();
 export const actualizarEstado = (ids, estado) => fuenteActual().actualizarEstado(ids, estado);
 export const cerrarCompra = (comprados, noConseguidos) => fuenteActual().cerrarCompra(comprados, noConseguidos);
 export const listarCompras = () => fuenteActual().listarCompras();
+export const borrarCompra = (id) => fuenteActual().borrarCompra(id);
+export const listarActividad = () => fuenteActual().listarActividad();
 
 export function suscribir(fn) {
   oyentes.add(fn);

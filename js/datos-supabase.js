@@ -126,6 +126,21 @@ export async function cerrarCompra(comprados, noConseguidos) {
   return data;
 }
 
+/** Borra una factura (queda anotado en el historial quién la borró). */
+export async function borrarCompra(id) {
+  const { error } = await obtenerCliente().rpc('borrar_compra', { factura_id: id });
+  if (error) throw error;
+}
+
+/** Historial de actividad (lo escribe la base de datos sola). */
+export async function listarActividad() {
+  const { data, error } = await obtenerCliente()
+    .from('actividad').select('id, creado_en, quien, accion, texto')
+    .order('creado_en', { ascending: false }).limit(300);
+  if (error) throw error;
+  return data;
+}
+
 export async function vaciar() {
   // Supabase exige un filtro en DELETE (protección contra borrados por error).
   // "id no es nulo" = todas las filas.

@@ -86,11 +86,14 @@ export async function agregar(productos, autor = 'Tú') {
     estado_en: null,
   }));
   cambiar([...items, ...nuevos]);
+  anotar('agregar', `Tú agregaste ${nuevos.map(describir).join(', ')}`);
 }
 
 /** Quita uno o varios productos por id. */
 export async function quitar(ids) {
   const fuera = new Set(ids);
+  const quitados = items.filter((it) => fuera.has(it.id));
+  if (quitados.length) anotar('quitar', `Tú quitaste ${quitados.map(describir).join(', ')}`);
   cambiar(items.filter((it) => !fuera.has(it.id)));
 }
 
@@ -103,8 +106,34 @@ export async function actualizarEstado(ids, estado, autor = 'Tú') {
     : it)));
 }
 
+// ── Historial (modo demo: en el navegador) ──────────────────
+const CLAVE_ACTIVIDAD = 'rh-actividad-demo';
+
+function describir(it) {
+  return [it.modelo, it.detalle && `(${it.detalle})`].filter(Boolean).join(' ') || it.categoria;
+}
+
+function anotar(accion, texto) {
+  try {
+    const lista = JSON.parse(localStorage.getItem(CLAVE_ACTIVIDAD) || '[]');
+    lista.unshift({ id: nuevoId(), creado_en: new Date().toISOString(), quien: 'Tú', accion, texto });
+    localStorage.setItem(CLAVE_ACTIVIDAD, JSON.stringify(lista.slice(0, 300)));
+  } catch { /* sin almacenamiento */ }
+}
+
+export async function listarActividad() {
+  try { return JSON.parse(localStorage.getItem(CLAVE_ACTIVIDAD) || '[]'); } catch { return []; }
+}
+
 // ── Facturas de compra (modo demo: en el navegador) ─────────
 const CLAVE_COMPRAS = 'rh-compras-demo';
+
+export async function borrarCompra(id) {
+  const lista = leerFacturas();
+  const f = lista.find((x) => x.id === id);
+  try { localStorage.setItem(CLAVE_COMPRAS, JSON.stringify(lista.filter((x) => x.id !== id))); } catch { /* sin almacenamiento */ }
+  if (f) anotar('borrar_factura', `Tú borraste la factura del ${new Date(f.creada_en).toLocaleString('es-CO')}`);
+}
 
 function leerFacturas() {
   try { return JSON.parse(localStorage.getItem(CLAVE_COMPRAS) || '[]'); } catch { return []; }
@@ -133,6 +162,9 @@ export async function cerrarCompra(comprados, noConseguidos, autor = 'Tú') {
     total_no_conseguidos: revisados.filter((it) => !si.has(it.id)).length,
   };
   try { localStorage.setItem(CLAVE_COMPRAS, JSON.stringify([factura, ...leerFacturas()].slice(0, 100))); } catch { /* sin almacenamiento */ }
+  const textoSi = revisados.filter((it) => si.has(it.id)).map(describir).join(', ');
+  const textoNo = revisados.filter((it) => !si.has(it.id)).map(describir).join(', ');
+  anotar('compra', `Tú terminaste una compra${textoSi ? `: compraste ${textoSi}` : ''}${textoNo ? `${textoSi ? ';' : ':'} no se consiguió ${textoNo}` : ''}`);
   cambiar(items
     .filter((it) => !si.has(it.id))
     .map((it) => (no.has(it.id) ? { ...it, estado: 'no_conseguido', estado_por: autor, estado_en: ahora } : it)));
@@ -140,6 +172,7 @@ export async function cerrarCompra(comprados, noConseguidos, autor = 'Tú') {
 }
 
 export async function vaciar() {
+  if (items.length) anotar('vaciar', `Tú vaciaste la lista (${items.length} productos)`);
   cambiar([]);
 }
 

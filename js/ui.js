@@ -388,7 +388,7 @@ function apartadoFactura(items, resultado) {
   );
 }
 
-function factura(f, abierta, onPDF) {
+function factura(f, abierta, onPDF, onBorrar) {
   const items = Array.isArray(f.items) ? f.items : [];
   const botonPDF = el('button', {
     type: 'button', class: 'btn btn-pdf',
@@ -413,32 +413,98 @@ function factura(f, abierta, onPDF) {
     el('div', { class: 'factura-cuerpo' },
       apartadoFactura(items, 'comprado'),
       apartadoFactura(items, 'no_conseguido'),
-      el('div', { class: 'factura-acciones' }, botonPDF),
+      el('div', { class: 'factura-acciones' },
+        el('button', { type: 'button', class: 'btn btn-borrar', onclick: () => onBorrar(f) }, '🗑️ Borrar'),
+        botonPDF,
+      ),
     ),
   );
 }
 
-export function dibujarFacturas(contenedor, facturas, { abierta, nueva, onPDF }) {
-  if (facturas === null) {
-    contenedor.replaceChildren(el('p', { class: 'cargando-texto', text: 'Cargando facturas…' }));
-    return;
+// ── Historial de actividad ───────────────────────────────────
+
+const hora = new Intl.DateTimeFormat('es-CO', { hour: 'numeric', minute: '2-digit' });
+const dia = new Intl.DateTimeFormat('es-CO', { weekday: 'long', day: 'numeric', month: 'long' });
+const ICONOS = { agregar: '＋', quitar: '−', vaciar: '⟲', compra: '🛒', borrar_factura: '🗑️' };
+
+function nombreDia(fecha) {
+  const hoy = new Date();
+  const ayer = new Date(Date.now() - 86_400_000);
+  const igual = (a, b) => a.toDateString() === b.toDateString();
+  if (igual(fecha, hoy)) return 'Hoy';
+  if (igual(fecha, ayer)) return 'Ayer';
+  const t = dia.format(fecha);
+  return t.charAt(0).toUpperCase() + t.slice(1);
+}
+
+function dibujarActividad(actividad) {
+  if (!actividad.length) {
+    return [el('div', { class: 'vacio-estado' },
+      el('div', { class: 'vacio-icono', 'aria-hidden': 'true', text: '🕓' }),
+      el('h2', { class: 'vacio-titulo', text: 'Sin actividad todavía' }),
+      el('p', { class: 'vacio-texto', text: 'Aquí aparece quién agregó, quitó, compró o borró algo.' }),
+    )];
   }
-  if (!facturas.length) {
-    contenedor.replaceChildren(el('div', { class: 'vacio-estado' },
+  const nodos = [];
+  let diaActual = '';
+  let lista = null;
+  for (const a of actividad) {
+    const fecha = new Date(a.creado_en);
+    const nombre = nombreDia(fecha);
+    if (nombre !== diaActual) {
+      diaActual = nombre;
+      nodos.push(el('h3', { class: 'grupo-titulo actividad-dia', text: nombre }));
+      lista = el('ul', { class: 'actividad' });
+      nodos.push(lista);
+    }
+    // El nombre de la persona va en negrita (siempre con textContent: seguro)
+    const quien = a.quien && a.texto.startsWith(a.quien) ? a.quien : '';
+    lista.append(el('li', { class: `actividad-linea accion-${a.accion}` },
+      el('span', { class: 'actividad-icono', 'aria-hidden': 'true', text: ICONOS[a.accion] ?? '•' }),
+      el('p', { class: 'actividad-texto' },
+        quien ? el('strong', { text: quien }) : null,
+        quien ? a.texto.slice(quien.length) : a.texto,
+      ),
+      el('time', { class: 'actividad-hora', datetime: a.creado_en, text: hora.format(fecha) }),
+    ));
+  }
+  return nodos;
+}
+
+/** Pantalla 🧾: pestañas Facturas | Historial. */
+export function dibujarRegistro(contenedor, { panel, facturas, actividad, abierta, nueva, onPDF, onBorrar, onPanel }) {
+  const boton = (id, texto, n) => el('button', {
+    type: 'button', role: 'tab', class: 'segmento', 'aria-selected': String(panel === id),
+    onclick: () => onPanel(id),
+  }, texto, n != null ? el('span', { class: 'contador', text: String(n) }) : null);
+
+  const selector = el('div', { class: 'segmentos', role: 'tablist', 'aria-label': 'Facturas o historial' },
+    boton('facturas', '🧾 Facturas', facturas?.length),
+    boton('actividad', '🕓 Historial', null),
+  );
+
+  let cuerpo;
+  const datos = panel === 'facturas' ? facturas : actividad;
+  if (datos === null) {
+    cuerpo = [el('p', { class: 'cargando-texto', text: 'Cargando…' })];
+  } else if (panel === 'actividad') {
+    cuerpo = dibujarActividad(actividad);
+  } else if (!facturas.length) {
+    cuerpo = [el('div', { class: 'vacio-estado' },
       el('div', { class: 'vacio-icono', 'aria-hidden': 'true', text: '🧾' }),
       el('h2', { class: 'vacio-titulo', text: 'Aún no hay facturas' }),
       el('p', { class: 'vacio-texto', text: 'Se crean solas al tocar "Terminar compra" en el Modo compras.' }),
-    ));
-    return;
+    )];
+  } else {
+    cuerpo = facturas.map((f) => factura(f, f.id === abierta, onPDF, onBorrar));
+    // Factura recién creada: animación de "guardado"
+    const n = nueva && cuerpo.find((d) => d.dataset.id === nueva);
+    if (n) {
+      n.classList.add('factura-nueva');
+      n.prepend(el('div', { class: 'sello-guardado', 'aria-hidden': 'true' }, el('span', { text: '✓' }), 'Factura guardada'));
+    }
   }
-  const nodos = facturas.map((f) => factura(f, f.id === abierta, onPDF));
-  // Factura recién creada: animación de "guardado"
-  if (nueva) {
-    const n = nodos.find((d) => d.dataset.id === nueva);
-    n?.classList.add('factura-nueva');
-    n?.prepend(el('div', { class: 'sello-guardado', 'aria-hidden': 'true' }, el('span', { text: '✓' }), 'Factura guardada'));
-  }
-  contenedor.replaceChildren(...nodos);
+  contenedor.replaceChildren(selector, ...cuerpo);
 }
 
 // ── Modal de confirmación ────────────────────────────────────

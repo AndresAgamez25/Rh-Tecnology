@@ -9,7 +9,7 @@ import { CATEGORIAS, categoriaPorId, nombreSubtipo } from './categorias.js';
 
 const URL_JSPDF = 'https://cdn.jsdelivr.net/npm/jspdf@4.2.1/+esm';
 
-const AZUL = [33, 82, 176];
+const AZUL = [26, 79, 224];   // azul rey del aviso de la tienda
 const CELESTE = [30, 180, 234];
 const VERDE = [16, 140, 96];
 const ROJO = [200, 50, 50];

@@ -335,3 +335,184 @@ begin
     alter publication supabase_realtime add table public.compras;
   end if;
 end $$;
+
+
+-- ─────────────────────────────────────────────────────────────
+-- 10. HISTORIAL DE ACTIVIDAD + BORRAR FACTURAS
+--    Cada cambio queda escrito en texto ("Andrés agregó…", "Osman
+--    terminó una compra…", "Patricia borró la factura…"). Lo escribe la
+--    BASE DE DATOS (triggers y funciones), no la app: así nada se escapa
+--    y nadie puede editarlo ni borrarlo. Se guardan las últimas 2000 líneas.
+-- ─────────────────────────────────────────────────────────────
+create table if not exists public.actividad (
+  id         bigint generated always as identity primary key,
+  creado_en  timestamptz not null default now(),
+  quien      text not null,
+  accion     text not null,          -- agregar | quitar | vaciar | compra | borrar_factura
+  texto      text not null
+);
+create index if not exists actividad_creado_en_idx on public.actividad (creado_en desc);
+
+alter table public.actividad enable row level security;
+revoke all on public.actividad from anon, authenticated;
+grant select on public.actividad to authenticated;
+drop policy if exists "leer actividad" on public.actividad;
+create policy "leer actividad" on public.actividad
+  for select to authenticated using ( (select public.es_permitido()) );
+
+-- Nombre de quien hace el cambio
+create or replace function public.quien_soy()
+returns text language sql stable security definer set search_path = ''
+as $$
+  select coalesce(
+    (select nombre from public.usuarios_permitidos where email = lower(auth.jwt() ->> 'email')),
+    'Sistema');
+$$;
+
+-- "Forro silicona · Redmi A7 Pro", "Celular · Redmi 13C (128 GB · 6 GB RAM)"
+create or replace function public.describir(categoria text, subtipo text, modelo text, detalle text)
+returns text language sql immutable set search_path = ''
+as $$
+  select concat_ws(' · ',
+    nullif(concat_ws(' ',
+      case categoria
+        when 'celulares' then 'Celular' when 'servicio' then 'Repuesto' when 'forros' then 'Forro'
+        when 'vidrios' then 'Vidrio' when 'cables' then 'Cable' when 'cargadores' then 'Cargador'
+        when 'audifonos' then 'Audífonos' else null end,
+      case when categoria = 'celulares' then null else
+        case subtipo
+          when 'antiespia' then 'antiespía' when 'inalambricos' then 'inalámbricos'
+          when 'camara' then 'de cámara' when 'camaras' then 'cámara' when 'pines' then 'pin de carga'
+          when 'baterias' then 'batería' when 'pantallas' then 'pantalla' when 'tapas' then 'tapa'
+          when 'tarjetas' then 'tarjeta' when 'botones' then 'botones' when 'otros' then null
+          else subtipo end
+      end), ''),
+    nullif(modelo, '') || coalesce(' (' || nullif(detalle, '') || ')', ''));
+$$;
+
+create or replace function public.anotar(accion text, texto text)
+returns void language sql security definer set search_path = ''
+as $$
+  insert into public.actividad (quien, accion, texto) values (public.quien_soy(), accion, texto);
+  delete from public.actividad where id <= (select max(id) - 2000 from public.actividad);
+$$;
+revoke all on function public.anotar(text, text) from public, anon, authenticated;
+
+-- Agregar: una línea por operación ("agregó A, B y C")
+create or replace function public.log_agregar()
+returns trigger language plpgsql security definer set search_path = ''
+as $$
+declare lista text;
+begin
+  select string_agg(public.describir(categoria, subtipo, modelo, detalle), ', ' order by creado_en)
+    into lista from nuevos;
+  if lista is not null then
+    perform public.anotar('agregar', public.quien_soy() || ' agregó ' || lista);
+  end if;
+  return null;
+end;
+$$;
+
+-- Quitar: "quitó X" (o "vació la lista" si quedó vacía). cerrar_compra lo omite.
+create or replace function public.log_quitar()
+returns trigger language plpgsql security definer set search_path = ''
+as $$
+declare lista text; n int;
+begin
+  if current_setting('rh.omitir_log', true) = '1' then return null; end if;
+  select count(*), string_agg(public.describir(categoria, subtipo, modelo, detalle), ', ')
+    into n, lista from viejos;
+  if n = 0 then return null; end if;
+  if not exists (select 1 from public.faltantes) and n > 1 then
+    perform public.anotar('vaciar', public.quien_soy() || ' vació la lista (' || n || ' productos)');
+  else
+    perform public.anotar('quitar', public.quien_soy() || ' quitó ' || lista);
+  end if;
+  return null;
+end;
+$$;
+
+drop trigger if exists faltantes_log_agregar on public.faltantes;
+create trigger faltantes_log_agregar after insert on public.faltantes
+  referencing new table as nuevos for each statement execute function public.log_agregar();
+drop trigger if exists faltantes_log_quitar on public.faltantes;
+create trigger faltantes_log_quitar after delete on public.faltantes
+  referencing old table as viejos for each statement execute function public.log_quitar();
+
+-- cerrar_compra (de la sección 9) ahora también anota la compra en el historial
+create or replace function public.cerrar_compra(comprados uuid[], no_conseguidos uuid[])
+returns public.compras
+language plpgsql security definer
+set search_path = ''
+as $$
+declare
+  yo text;
+  factura public.compras;
+  si text;
+  no text;
+begin
+  yo := (select nombre from public.usuarios_permitidos where email = lower(auth.jwt() ->> 'email'));
+  if yo is null then
+    raise exception 'Sin permiso' using errcode = '42501';
+  end if;
+  comprados := coalesce(comprados, '{}');
+  no_conseguidos := coalesce(no_conseguidos, '{}');
+
+  insert into public.compras (hecha_por, items, total_comprados, total_no_conseguidos)
+  select yo,
+         jsonb_agg(jsonb_build_object(
+           'categoria', f.categoria, 'subtipo', f.subtipo, 'modelo', f.modelo,
+           'detalle', f.detalle, 'quedan', f.quedan, 'creado_por', f.creado_por,
+           'resultado', case when f.id = any(comprados) then 'comprado' else 'no_conseguido' end
+         ) order by (f.id = any(comprados)) desc, f.categoria, f.subtipo, f.modelo),
+         count(*) filter (where f.id = any(comprados)),
+         count(*) filter (where not f.id = any(comprados))
+  from public.faltantes f
+  where f.id = any(comprados) or f.id = any(no_conseguidos)
+  having count(*) > 0
+  returning * into factura;
+
+  if factura.id is null then
+    raise exception 'No hay productos revisados para guardar' using errcode = '22023';
+  end if;
+
+  select string_agg(public.describir(f.categoria, f.subtipo, f.modelo, f.detalle), ', ') filter (where f.id = any(comprados)),
+         string_agg(public.describir(f.categoria, f.subtipo, f.modelo, f.detalle), ', ') filter (where f.id = any(no_conseguidos))
+    into si, no
+  from public.faltantes f where f.id = any(comprados) or f.id = any(no_conseguidos);
+
+  perform set_config('rh.omitir_log', '1', true);   -- el "quitar" de lo comprado no se anota aparte
+  delete from public.faltantes where id = any(comprados);
+  perform set_config('rh.omitir_log', '0', true);
+  update public.faltantes set estado = 'no_conseguido' where id = any(no_conseguidos);
+
+  perform public.anotar('compra', yo || ' terminó una compra'
+    || coalesce(': compró ' || si, '')
+    || coalesce(case when si is null then ': ' else '; ' end || 'no consiguió ' || no, ''));
+  return factura;
+end;
+$$;
+revoke all on function public.cerrar_compra(uuid[], uuid[]) from public, anon;
+grant execute on function public.cerrar_compra(uuid[], uuid[]) to authenticated;
+
+-- Borrar una factura (para liberar espacio). Queda anotado quién la borró.
+create or replace function public.borrar_compra(factura_id uuid)
+returns void language plpgsql security definer set search_path = ''
+as $$
+declare f public.compras;
+begin
+  if not public.es_permitido() then
+    raise exception 'Sin permiso' using errcode = '42501';
+  end if;
+  delete from public.compras where id = factura_id returning * into f;
+  if f.id is null then
+    raise exception 'La factura no existe' using errcode = 'P0002';
+  end if;
+  perform public.anotar('borrar_factura', public.quien_soy() || ' borró la factura del '
+    || to_char(f.creada_en at time zone 'America/Bogota', 'DD/MM/YYYY HH12:MI am')
+    || ' (de ' || f.hecha_por || ': ' || f.total_comprados || ' comprados, '
+    || f.total_no_conseguidos || ' no conseguidos)');
+end;
+$$;
+revoke all on function public.borrar_compra(uuid) from public, anon;
+grant execute on function public.borrar_compra(uuid) to authenticated;

@@ -73,6 +73,8 @@ const estado = {
   facturas: [],
   facturaAbierta: null,
   facturaNueva: null,
+  panelRegistro: 'facturas', // 'facturas' | 'actividad'
+  actividad: [],
 };
 
 // ── Render ───────────────────────────────────────────────────
@@ -81,10 +83,15 @@ function render() {
   const pantalla = estado.verFacturas ? 'facturas' : estado.comprasDesde ? 'compras' : 'lista';
   document.body.dataset.modo = pantalla;
   if (pantalla === 'facturas') {
-    ui.dibujarFacturas(elementos.lista, estado.facturas, {
+    ui.dibujarRegistro(elementos.lista, {
+      panel: estado.panelRegistro,
+      facturas: estado.facturas,
+      actividad: estado.actividad,
       abierta: estado.facturaAbierta,
       nueva: estado.facturaNueva,
       onPDF: descargarPDF,
+      onBorrar: borrarFactura,
+      onPanel: (panel) => { estado.panelRegistro = panel; render(); animarEntrada(); },
     });
     // la animación de "guardada" solo una vez (cuando ya llegaron las facturas)
     if (estado.facturas !== null) estado.facturaNueva = null;
@@ -269,19 +276,25 @@ async function terminarCompra() {
 
 // ── Facturas ─────────────────────────────────────────────────
 
+async function cargarRegistro() {
+  const [facturas, actividad] = await Promise.allSettled([datos.listarCompras(), datos.listarActividad()]);
+  estado.facturas = facturas.status === 'fulfilled' ? facturas.value : [];
+  estado.actividad = actividad.status === 'fulfilled' ? actividad.value : [];
+  if (facturas.status === 'rejected' || actividad.status === 'rejected') {
+    console.error(facturas.reason ?? actividad.reason);
+    ui.toast('No se pudo cargar todo. Revisa tu conexión.');
+  }
+}
+
 async function abrirFacturas(idAbierta = null) {
   estado.verFacturas = true;
+  estado.panelRegistro = 'facturas';
   estado.facturas = null; // "cargando"
+  estado.actividad = null;
   render();
   window.scrollTo({ top: 0 });
-  try {
-    estado.facturas = await datos.listarCompras();
-    estado.facturaAbierta = idAbierta ?? estado.facturas[0]?.id ?? null;
-  } catch (error) {
-    console.error(error);
-    estado.facturas = [];
-    ui.toast('No se pudieron cargar las facturas.');
-  }
+  await cargarRegistro();
+  estado.facturaAbierta = idAbierta ?? estado.facturas[0]?.id ?? null;
   render();
   animarEntrada();
 }
@@ -294,6 +307,24 @@ async function descargarPDF(factura) {
   } catch (error) {
     console.error(error);
     ui.toast('No se pudo crear el PDF. Revisa tu conexión e intenta de nuevo.');
+  }
+}
+
+async function borrarFactura(f) {
+  const ok = await ui.confirmar({
+    titulo: '¿Borrar esta factura?',
+    mensaje: `Factura del ${new Date(f.creada_en).toLocaleString('es-CO', { dateStyle: 'long', timeStyle: 'short' })} (${f.hecha_por}).\n\nSe borra para todos y no se puede recuperar. Si la necesitas, descarga antes el PDF. En el historial quedará anotado quién la borró.`,
+    textoAceptar: 'Sí, borrar',
+  });
+  if (!ok) return;
+  try {
+    await datos.borrarCompra(f.id);
+    await cargarRegistro();
+    render();
+    ui.toast('🗑️ Factura borrada');
+  } catch (error) {
+    console.error(error);
+    ui.toast('No se pudo borrar la factura. Revisa tu conexión.');
   }
 }
 

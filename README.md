@@ -26,8 +26,11 @@ salen a comprar, usan el **Modo compras** para marcar lo que encontraron y lo qu
 - **Servicio técnico:** repuestos (pantallas, tapas, tarjetas, cámaras, pines de carga, botones, baterías…).
   "Tapa del Redmi 13C azul" → *Servicio técnico › Tapas › Redmi 13C · color azul*.
 - **Facturas de compra:** al terminar el Modo compras se guarda una factura **permanente** (la base de datos no
-  permite editarla ni borrarla) con fecha, quién compró, un apartado *Se compró* y otro *No se consiguió*,
+  permite editarla) con fecha, quién compró, un apartado *Se compró* y otro *No se consiguió*,
   por categoría. Se puede **descargar en PDF**. Lo comprado sale de la lista; lo que no había vuelve a ella.
+- **Historial de actividad:** un apartado solo de texto con quién hizo qué ("Andrés agregó…", "Osman terminó una
+  compra…", "Patricia borró la factura…"). Lo escribe la **base de datos** con triggers, así que no se puede
+  falsear ni borrar desde la app. Las facturas se pueden **borrar** para liberar espacio (queda anotado quién).
 - **Respaldo sin IA:** si la IA falla, un clasificador por palabras clave entiende el texto.
 - **PWA:** se instala en iPhone y Android (la app muestra un botón "Instalar la app"), abre sin internet,
   recuerda la sesión y respeta el notch (safe-area).

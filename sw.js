@@ -30,8 +30,8 @@ const ARCHIVOS = [
   './js/pdf.js',
   './icons/logo-rh.svg',
   './icons/logo.webp',
-  './icons/icon-192.png',
-  './icons/apple-touch-icon.png',
+  './icons/icon-192-v2.png',
+  './icons/apple-touch-icon-v2.png',
 ];
 // Librerías con versión fija (Supabase, jsPDF): se guardan para siempre
 const CDN = 'https://cdn.jsdelivr.net/npm/';

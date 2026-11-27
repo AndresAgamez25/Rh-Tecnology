@@ -18,7 +18,11 @@ Búsqueda por nombre, teléfono, IMEI o número de orden.
 ## Recibir equipo (voz, foto o texto; la IA llena y se revisa)
 - Número de orden automático (#0145).
 - Cliente: nombre, teléfono (WhatsApp).
-- Equipo: marca/modelo/color, IMEI opcional, contraseña o patrón.
+- Equipo: marca/modelo/color, IMEI opcional.
+- **Bloqueo**: Contraseña/PIN · **Patrón** · Sin clave. El patrón se **dibuja con el dedo** en una
+  cuadrícula de 9 puntos (se guarda como la secuencia, p. ej. 1-2-3-5-7-8-9) y se muestra dibujado,
+  con el inicio en verde, flechas y el orden numerado (en la ficha, en Entregados y en el recibo).
+  También se puede dictar ("patrón en Z empezando arriba a la izquierda").
 - Lo que dice el cliente que tiene.
 - Precio cotizado, abono y cómo pagó el abono.
 - **Llegó con**: SIM, memoria, forro, cargador, caja, **＋ Otro (texto libre)**.

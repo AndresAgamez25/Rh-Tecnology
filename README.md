@@ -15,6 +15,8 @@ salen a comprar, usan el **Modo compras** para marcar lo que encontraron y lo qu
 
 - **Entrada natural:** "No hay forro de silicona Redmi A7 Pro, quedan azul y negro" se guarda en
   *Forros › Silicona* con la etiqueta *Quedan: azul y negro*.
+- **Celulares:** "Falta el Redmi 13C de 128 gigas y 6 de RAM" se guarda en *Celulares › Xiaomi* con el
+  detalle *128 GB · 6 GB RAM*. Entiende también "4+128" y "de 128".
 - **Audio y foto:** se graba un audio o se toma una foto de la caja y la IA (Gemini) lo entiende.
 - **"Ya llegó…"** quita el producto, y **"ya se actualizó / ya se surtió todo"** vacía la lista
   (con un modal de confirmación propio).
@@ -22,7 +24,8 @@ salen a comprar, usan el **Modo compras** para marcar lo que encontraron y lo qu
 - **Modo compras:** lista organizada para comprar, con **✓ Comprado** y **✗ No hay**. Lo comprado queda
   como "🛒 Comprado" hasta que llega; lo que no se consiguió vuelve a la lista para la próxima vez.
 - **Respaldo sin IA:** si la IA falla, un clasificador por palabras clave entiende el texto.
-- **PWA:** se instala en iPhone y Android, abre sin internet y respeta el notch (safe-area).
+- **PWA:** se instala en iPhone y Android (la app muestra un botón "Instalar la app"), abre sin internet,
+  recuerda la sesión y respeta el notch (safe-area).
 - **Modo demo:** sin configuración (o con `?demo` en la URL) funciona con datos de prueba, ideal para
   mostrar el proyecto.
 
@@ -183,6 +186,7 @@ La URL y la clave están en Supabase → **Project Settings → API Keys** (usa 
 |---|---|
 | "No hay forro de silicona Redmi A7 Pro, quedan azul y negro" | Agrega en Forros › Silicona con *Quedan: azul y negro* |
 | "Falta vidrio blindado A15 y A25, tampoco hay cable tipo C de 2 metros" | Agrega 3 productos |
+| "No hay Samsung A15 4+128 ni Redmi 13C de 256" | Agrega 2 celulares con almacenamiento y RAM |
 | "Ya llegó el vidrio blindado del A15" | Lo quita de la lista |
 | "Ya se surtió todo, solo falta forro lujo iPhone 14" | Pide confirmación, vacía y agrega el forro |
 | 📷 Foto de una caja | Identifica el producto y el modelo |

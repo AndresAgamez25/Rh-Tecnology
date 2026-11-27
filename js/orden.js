@@ -27,7 +27,7 @@ function pie() {
   return el('footer', { class: 'cliente-pie' },
     el('p', { text: `📍 ${NEGOCIO.nombre} · ${NEGOCIO.lugar}` }),
     ...NEGOCIO.horario.split(' · ').map((h) => el('p', { text: `🕗 ${h}` })),
-    el('p', { class: 'cliente-condiciones', text: NEGOCIO.condiciones }));
+    el('p', { class: 'cliente-condiciones', text: `${NEGOCIO.condiciones} ${NEGOCIO.firma}` }));
 }
 
 function pintar(o) {

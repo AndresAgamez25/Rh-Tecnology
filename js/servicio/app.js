@@ -825,7 +825,7 @@ async function abrirRecibir() {
           if (!a) return;
           try { const img = await prepararFoto(a, 1100); fotos.push(await (await fetch(`data:${img.mime};base64,${img.base64}`)).blob()); pintarFotos(); } catch { toast('No se pudo leer la foto.'); }
         } })),
-      el('p', { class: 'st-nota', text: 'Condiciones: pasados 30 días desde que el equipo esté listo sin reclamarlo, RH Tecnology no responde por él. No respondemos por la información del celular.' }),
+      el('p', { class: 'st-nota', text: `Condiciones: ${wa.NEGOCIO.condiciones} ${wa.NEGOCIO.firma}` }),
       guardar),
   );
   window.scrollTo({ top: 0 });

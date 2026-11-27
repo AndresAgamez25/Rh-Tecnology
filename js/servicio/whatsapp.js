@@ -9,8 +9,8 @@ export const NEGOCIO = {
   nombre: 'RH Tecnology',
   lugar: 'Corozal, Sucre',
   horario: 'Lunes a sábado, 8 a. m. a 7 p. m. · Domingos y festivos, 8:30 a. m. a 2 p. m.',
-  condiciones: 'Pasados 30 días desde que su equipo esté listo sin reclamarlo, RH Tecnology no responde por él. '
-    + 'No respondemos por la información guardada en el celular.',
+  condiciones: 'Después de 30 días de dejar su equipo sin reclamarlo, RH Tecnology no responde por él.',
+  firma: 'Atentamente, la Administración.',
 };
 
 export const pesos = (n) => `$${Number(n || 0).toLocaleString('es-CO')}`;
@@ -67,6 +67,7 @@ export function mensajeRecibido(o, abono) {
     'Le avisaremos por este medio cuando esté listo.',
     '',
     `_${NEGOCIO.condiciones}_`,
+    `_${NEGOCIO.firma}_`,
     '',
     pie(),
   ].filter((l, i, t) => l !== '' || (t[i - 1] !== '' && i > 0)).join('\n');
@@ -141,6 +142,7 @@ export function mensajeRecordatorio(o, dias) {
     `Le recordamos que su *${o.equipo || 'equipo'}* está listo desde hace ${dias} ${dias === 1 ? 'día' : 'días'} y puede pasar a recogerlo.`,
     '',
     `_${NEGOCIO.condiciones}_`,
+    `_${NEGOCIO.firma}_`,
     '',
     pie(),
   ].join('\n');

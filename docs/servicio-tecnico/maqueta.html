@@ -1,0 +1,255 @@
+<!doctype html><html lang="es"><head><meta charset="utf-8"><title>Maqueta v2</title><style>
+  :root {
+    --fondo:#070d1c; --sup:#0f1a33; --sup2:#172649; --borde:#22345e; --texto:#eaf2ff; --suave:#8ea4cc;
+    --rey:#2f6bff; --brillante:#1f86ff; --celeste:#1eb4ea; --exito:#34d399; --peligro:#f87171; --aviso:#fbbf24;
+    --degradado:linear-gradient(135deg,#1a4fe0 0%,#1f86ff 55%,#1eb4ea 100%);
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; background:#111; font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; color:var(--texto); }
+  .pantalla {
+    width:390px; height:844px; overflow:hidden; position:relative; margin:0 0 20px;
+    background:radial-gradient(120% 60% at 100% 0%, rgb(31 134 255/.14), transparent 60%), radial-gradient(100% 50% at 0% 100%, rgb(26 79 224/.24), transparent 60%), var(--fondo);
+    font-size:15px;
+  }
+  .enc { display:flex; align-items:center; gap:10px; padding:12px 16px 10px; }
+  .enc img { width:44px; }
+  .enc h1 { margin:0; font-size:15px; letter-spacing:.6px; }
+  .enc small { color:var(--suave); font-size:12px; }
+  .rey { color:var(--rey); } .cel { color:var(--celeste); }
+  .enc .acc { margin-left:auto; display:flex; gap:6px; }
+  .bt { border:1px solid var(--borde); background:var(--sup2); color:var(--texto); border-radius:999px; padding:6px 12px; font-size:13px; font-weight:700; }
+  .bt.p { background:var(--degradado); border:0; color:#fff; }
+  .cuerpo { padding:4px 16px; }
+  h2 { font-size:16px; margin:14px 0 8px; display:flex; align-items:center; gap:8px; }
+  .cont { background:var(--sup2); color:var(--suave); font-size:11px; border-radius:999px; padding:1px 7px; }
+  .etq { display:inline-block; font-size:11px; font-weight:700; padding:2px 7px; border-radius:6px; }
+  .nota { position:absolute; left:12px; right:12px; bottom:12px; background:#fffbe6; color:#3b2f00; border-radius:10px; padding:8px 10px; font-size:11.5px; line-height:1.35; border:1px solid #f5d76e; }
+  .nota b { color:#000; }
+  /* Inicio */
+  .saludo { margin:6px 0 2px; font-size:22px; font-weight:800; }
+  .saludo-sub { color:var(--suave); margin:0 0 16px; font-size:13px; }
+  .modulos { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+  .modulo { border-radius:18px; padding:16px 14px; min-height:200px; display:flex; flex-direction:column; gap:8px; position:relative; overflow:hidden; border:1px solid var(--borde); }
+  .modulo.f { background:linear-gradient(160deg, rgb(26 79 224/.45), rgb(15 26 51) 70%); }
+  .modulo.s { background:linear-gradient(160deg, rgb(30 180 234/.35), rgb(15 26 51) 70%); }
+  .modulo .ico { width:52px; height:52px; border-radius:14px; display:grid; place-items:center; font-size:28px; background:rgb(255 255 255/.1); }
+  .modulo h3 { margin:6px 0 0; font-size:17px; }
+  .modulo p { margin:0; color:var(--suave); font-size:12.5px; line-height:1.35; }
+  .modulo .num { margin-top:auto; font-size:13px; font-weight:700; }
+  .modulo .num b { font-size:24px; display:block; }
+  .resumen { margin-top:14px; display:grid; gap:8px; }
+  .fila { display:flex; align-items:center; gap:10px; background:var(--sup); border:1px solid var(--borde); border-radius:12px; padding:10px 12px; font-size:13px; }
+  .fila .i { font-size:18px; }
+  .fila .d { margin-left:auto; color:var(--suave); font-size:12px; }
+  /* Lista de órdenes */
+  .buscar { display:flex; align-items:center; gap:8px; background:var(--sup); border:1px solid var(--borde); border-radius:12px; padding:9px 12px; color:var(--suave); font-size:14px; }
+  .chips { display:flex; gap:6px; margin:10px 0 4px; flex-wrap:nowrap; overflow:hidden; }
+  .chip { flex:none; border:1px solid var(--borde); background:var(--sup); color:var(--suave); border-radius:999px; padding:5px 10px; font-size:12px; font-weight:700; }
+  .chip.on { background:var(--degradado); color:#fff; border:0; }
+  .orden { display:grid; grid-template-columns:auto 1fr auto; gap:3px 10px; align-items:center; background:var(--sup); border:1px solid var(--borde); border-left:4px solid var(--c); border-radius:12px; padding:9px 11px; margin-top:7px; }
+  .orden .n { grid-row:span 2; font-size:11px; color:var(--suave); font-weight:800; text-align:center; line-height:1.15; }
+  .orden .n b { display:block; font-size:15px; color:var(--texto); }
+  .orden .t { font-weight:800; font-size:14px; }
+  .orden .c { color:var(--suave); font-size:12px; }
+  .orden .e { grid-row:span 2; text-align:right; }
+  .orden .e .etq { background:color-mix(in srgb, var(--c) 18%, transparent); color:var(--c); }
+  .orden .e div { font-size:11px; color:var(--suave); margin-top:4px; }
+  .fab { position:absolute; right:16px; bottom:78px; background:var(--degradado); color:#fff; font-weight:800; border-radius:999px; padding:13px 18px; box-shadow:0 6px 20px rgb(31 134 255/.5); font-size:14px; }
+  /* Ficha */
+  .tarjeta { background:var(--sup); border:1px solid var(--borde); border-radius:14px; padding:10px 12px; margin-top:8px; }
+  .tarjeta h4 { margin:0 0 6px; font-size:12px; letter-spacing:.06em; text-transform:uppercase; color:var(--suave); display:flex; align-items:center; gap:6px; }
+  .kv { display:grid; grid-template-columns:auto 1fr; gap:3px 10px; font-size:13px; }
+  .kv span:nth-child(odd) { color:var(--suave); }
+  .pasos { display:flex; gap:3px; margin:8px 0 2px; }
+  .pasos i { flex:1; height:5px; border-radius:3px; background:var(--sup2); }
+  .pasos i.ok { background:var(--degradado); }
+  .linea { position:relative; padding:0 0 9px 18px; font-size:12.5px; line-height:1.35; }
+  .linea:before { content:''; position:absolute; left:4px; top:5px; width:8px; height:8px; border-radius:50%; background:var(--c, var(--celeste)); }
+  .linea:after { content:''; position:absolute; left:7.5px; top:15px; bottom:0; width:1px; background:var(--borde); }
+  .linea:last-child:after { display:none; }
+  .linea small { color:var(--suave); display:block; font-size:11px; }
+  .fotos { display:flex; gap:6px; }
+  .foto { width:62px; height:62px; border-radius:10px; background:linear-gradient(135deg,#25324f,#111a30); display:grid; place-items:center; font-size:10px; color:var(--suave); text-align:center; border:1px solid var(--borde); }
+  .plata { display:grid; grid-template-columns:1fr 1fr 1fr; gap:6px; text-align:center; }
+  .plata div { background:var(--sup2); border-radius:10px; padding:6px 4px; font-size:11px; color:var(--suave); }
+  .plata b { display:block; color:var(--texto); font-size:15px; }
+  .acciones { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:10px; }
+  .acc { text-align:center; padding:10px; border-radius:12px; font-weight:800; font-size:13px; }
+  .wa { background:#25d366; color:#032b12; }
+  .pdf { background:var(--degradado); color:#fff; }
+  /* Nuevo */
+  .voz { display:flex; gap:8px; margin:8px 0; }
+  .voz div { flex:1; text-align:center; border-radius:12px; padding:12px 6px; font-weight:800; font-size:13px; }
+  .campo { margin-top:7px; }
+  .campo label { font-size:11px; color:var(--suave); display:block; margin-bottom:3px; }
+  .campo .in { background:var(--fondo); border:1px solid var(--borde); border-radius:10px; padding:8px 10px; font-size:13.5px; }
+  .ia { border-color:rgb(30 180 234/.6) !important; box-shadow:0 0 0 2px rgb(30 180 234/.12); }
+  .dos { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+  .checks { display:flex; flex-wrap:wrap; gap:6px; }
+  .checks span { font-size:12px; background:var(--sup2); border-radius:8px; padding:4px 8px; }
+  .checks span.on { background:rgb(30 180 234/.2); color:var(--celeste); font-weight:700; }
+  /* Tabla de datos */
+  .tabla { padding:14px 14px 0; }
+  .tabla h2 { margin:4px 0 10px; font-size:17px; }
+  .grupo { margin-bottom:9px; border-radius:12px; overflow:hidden; border:1px solid var(--borde); }
+  .grupo .tit { background:var(--degradado); color:#fff; font-weight:800; font-size:12.5px; padding:6px 10px; }
+  .grupo table { width:100%; border-collapse:collapse; font-size:11.5px; background:var(--sup); }
+  .grupo td { padding:4px 10px; border-top:1px solid var(--borde); vertical-align:top; }
+  .grupo td:first-child { font-weight:700; width:38%; }
+  .grupo td:last-child { color:var(--suave); }
+</style><style>
+  .tabs3 { display:grid; grid-template-columns:1fr 1.35fr 1.1fr; gap:4px; padding:4px; border:1px solid var(--borde); border-radius:999px; background:var(--sup); margin:10px 0 4px; }
+  .bt { white-space:nowrap; }
+  .tabs3 span { text-align:center; font-size:12.5px; font-weight:800; color:var(--suave); padding:8px 4px; border-radius:999px; }
+  .tabs3 span.on { background:var(--degradado); color:#fff; }
+  .eq { background:var(--sup); border:1px solid var(--borde); border-radius:12px; padding:10px 12px; margin-top:8px; }
+  .eq .top { display:flex; justify-content:space-between; align-items:baseline; gap:8px; }
+  .eq b { font-size:14.5px; }
+  .eq .n { font-size:11px; color:var(--suave); font-weight:800; }
+  .eq .c { font-size:12.5px; color:var(--suave); margin-top:2px; }
+  .eq .t { font-size:12.5px; margin-top:4px; }
+  .eq .pie { display:flex; justify-content:space-between; font-size:12px; margin-top:6px; color:var(--suave); }
+  .eq .pie b { font-size:13px; color:var(--texto); }
+  .pill { display:inline-block; font-size:11px; font-weight:800; padding:2px 8px; border-radius:999px; }
+  .verde { background:rgb(52 211 153/.16); color:var(--exito); }
+  .amarillo { background:rgb(251 191 36/.16); color:var(--aviso); }
+  .azul { background:rgb(30 180 234/.16); color:var(--celeste); }
+  .btns { display:grid; gap:6px; grid-template-columns:repeat(3,1fr); margin-top:8px; }
+  .btns div { text-align:center; font-size:12px; font-weight:800; padding:9px 4px; border-radius:10px; background:var(--sup2); }
+  .grande { text-align:center; padding:12px; border-radius:12px; font-weight:800; font-size:14px; margin-top:10px; }
+  .hoja { position:absolute; left:0; right:0; bottom:0; background:var(--sup); border-top:1px solid var(--borde); border-radius:20px 20px 0 0; padding:14px 16px 18px; box-shadow:0 -10px 30px rgb(0 0 0/.5); }
+  .hoja h3 { margin:0 0 8px; font-size:16px; }
+  .velo { position:absolute; inset:0; background:rgb(0 0 0/.55); }
+  .wa-msg { background:#0b3b2a; border-radius:12px 12px 12px 2px; padding:10px 12px; font-size:12.5px; line-height:1.45; color:#e8fff3; }
+  .metodos { display:grid; grid-template-columns:repeat(4,1fr); gap:6px; margin-top:6px; }
+  .metodos span { text-align:center; padding:9px 2px; border-radius:10px; background:var(--sup2); font-size:12px; font-weight:800; }
+  .metodos span.on { background:rgb(30 180 234/.22); color:var(--celeste); outline:1px solid var(--celeste); }
+  .candado { font-size:11px; color:var(--suave); }
+  .modulos-g { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-top:24px; }
+  .modulos-g .modulo { min-height:300px; justify-content:center; align-items:center; text-align:center; }
+  .modulos-g .ico { width:76px; height:76px; font-size:40px; border-radius:20px; }
+</style></head><body><section class="pantalla" id="p1">
+<div class="enc"><img src="logo-rh.svg" alt=""><div><h1><span class="rey">RH TEC</span><span class="cel">NOLOGY</span></h1><small>Hola, Andrés · Salir</small></div></div>
+<div class="cuerpo">
+ <div class="modulos-g">
+  <div class="modulo f"><div class="ico">📋</div><h3>Faltantes</h3><p>Lo que se acabó, compras y facturas</p><div class="num" style="margin-top:14px"><b>12</b>por comprar</div></div>
+  <div class="modulo s"><div class="ico">🔧</div><h3>Servicio técnico</h3><p>Celulares en reparación</p><div class="num" style="margin-top:14px"><b>5</b>en el taller</div></div>
+ </div>
+</div>
+<div class="nota"><b>1 · Inicio.</b> Solo los dos apartados. Todo lo del taller queda dentro de Servicio técnico.</div>
+</section>
+<section class="pantalla" id="p2">
+<div class="enc"><img src="logo-rh.svg" alt=""><div><h1>🔧 Servicio técnico</h1><small>5 activos · 2 por entregar</small></div><div class="acc"><span class="bt">‹ Inicio</span></div></div>
+<div class="cuerpo">
+ <div class="buscar">🔍 Buscar nombre, teléfono, IMEI u orden…</div>
+ <div class="tabs3"><span class="on">Activos 5</span><span>Por entregar 2</span><span>Entregados 128</span></div>
+ <div class="eq"><div class="top"><b>Redmi A7 Pro</b><span class="n">#0144</span></div><div class="c">Carlos Pérez · 300 123 4567</div><div class="t">🔧 Pin de carga → tarjeta de carga</div><div class="pie"><span>Llegó hace 2 días</span><span> <b>$70.000</b></span></div></div>
+ <div class="eq"><div class="top"><b>Samsung A15</b><span class="n">#0143</span></div><div class="c">Juan Díaz · 301 555 2233</div><div class="t">🔧 No enciende · revisando</div><div class="pie"><span>Llegó hoy</span><span> <b>$50.000</b></span></div></div>
+ <div class="eq"><div class="top"><b>iPhone 11</b><span class="n">#0141</span></div><div class="c">Laura Gómez · 315 222 1100</div><div class="t">🔧 Cambio de pantalla</div><div class="pie"><span>Llegó hace 3 días</span><span> <b>$250.000</b></span></div></div>
+ <div class="eq"><div class="top"><b>Moto G24</b><span class="n">#0139</span></div><div class="c">Ana Ruiz · 312 444 9090</div><div class="t">🔧 Batería</div><div class="pie"><span>Llegó hace 4 días</span><span> <b>$90.000</b></span></div></div>
+ <div class="eq"><div class="top"><b>Tecno Spark 20</b><span class="n">#0136</span></div><div class="c">María León · 320 777 3131</div><div class="t">🔧 Cámara trasera</div><div class="pie"><span>Llegó hace 5 días</span><span> <b>$90.000</b></span></div></div>
+</div>
+<div class="fab">＋ Recibir equipo</div>
+<div class="nota"><b>2 · Activos.</b> Los celulares que están ahora en el taller: qué se le está haciendo, cuánto cuesta y hace cuánto llegó.</div>
+</section>
+<section class="pantalla" id="p3">
+<div class="enc"><div><h1>#0144 · Redmi A7 Pro</h1><small>Carlos Pérez · 300 123 4567 · contraseña •••• <span style="color:var(--celeste)">ver</span></small></div><div class="acc"><span class="bt">‹ Volver</span></div></div>
+<div class="cuerpo" style="padding-top:0">
+ <div class="tarjeta"><h4>🧾 Historial del arreglo</h4>
+  <div class="linea" style="--c:var(--suave)"><small>25 nov 9:10 a. m. · Andrés</small>Llegó por <b>pin de carga</b>. No carga. Cotizado <b>$45.000</b>.</div>
+  <div class="linea" style="--c:var(--celeste)"><small>25 nov 3:20 p. m. · Osman</small>Se destapó y se cambió el pin. <b>No funcionó.</b></div>
+  <div class="linea" style="--c:var(--celeste)"><small>25 nov 4:05 p. m. · Osman · 📷 2 fotos</small>Se le hizo estudio a la tarjeta: la tarjeta de carga está mala.</div>
+  <div class="linea" style="--c:var(--aviso)"><small>25 nov 4:30 p. m. · Osman</small>💲 Precio <b>$45.000 → $70.000</b>. Motivo: hay que cambiar la tarjeta de carga. Cliente avisado por WhatsApp ✓ y aceptó.</div>
+  <div class="linea" style="--c:var(--exito)"><small>26 nov 11:00 a. m. · Osman · 📷 1 foto</small>Se cambió la tarjeta. <b>Ya carga y funciona.</b></div>
+ </div>
+ <div class="tarjeta"><h4>📷 Fotos (4)</h4><div class="fotos"><div class="foto">Al<br>recibir</div><div class="foto">Pin<br>viejo</div><div class="foto">Tarjeta<br>dañada</div><div class="foto">Ya<br>carga</div></div></div>
+ <div class="tarjeta"><div class="plata"><div>Total<b>$70.000</b><span style="font-size:10px">antes $45.000</span></div><div>Abonó<b>$20.000</b></div><div>Falta<b style="color:var(--aviso)">$50.000</b></div></div></div>
+ <div class="btns"><div>📝 Agregar trabajo</div><div>📷 Agregar foto</div><div>💲 Cambiar precio</div></div>
+ <div class="grande" style="background:var(--exito);color:#04261a">✅ Marcar como listo y avisar al cliente</div>
+</div>
+</section>
+<section class="pantalla" id="p4">
+<div class="enc"><div><h1>#0144 · Redmi A7 Pro</h1><small>Carlos Pérez · 300 123 4567</small></div></div>
+<div class="cuerpo" style="opacity:.35">
+ <div class="tarjeta"><h4>🧾 Historial del arreglo</h4><div class="linea"><small>25 nov · Andrés</small>Llegó por pin de carga. Cotizado $45.000.</div><div class="linea"><small>25 nov · Osman</small>Se cambió el pin. No funcionó.</div></div>
+</div>
+<div class="velo"></div>
+<div class="hoja">
+ <h3>💲 Cambiar precio</h3>
+ <div class="dos"><div class="campo"><label>Antes</label><div class="in" style="text-decoration:line-through;color:var(--suave)">$45.000</div></div><div class="campo"><label>Nuevo precio</label><div class="in ia">$70.000</div></div></div>
+ <div class="campo"><label>¿Por qué cambia? (obligatorio)</label><div class="in ia" style="min-height:58px">Se cambió el pin y no funcionó. La tarjeta de carga está mala y hay que cambiarla.</div></div>
+ <div class="campo"><label>Avisar al cliente</label><div class="wa-msg">Hola Carlos 👋, le escribe <b>RH Tecnology</b>. Revisando su Redmi A7 Pro encontramos que, además del pin, la <b>tarjeta de carga</b> está dañada. El nuevo valor es <b>$70.000</b> (antes $45.000). ¿Desea que sigamos con el arreglo?</div></div>
+ <div class="grande" style="background:var(--degradado);color:#fff">Guardar y enviar por WhatsApp</div>
+</div>
+</section>
+<section class="pantalla" id="p5">
+<div class="enc"><div><h1>#0144 · Redmi A7 Pro</h1><small>Carlos Pérez · 300 123 4567</small></div></div>
+<div class="velo"></div>
+<div class="hoja" style="top:120px">
+ <h3>✅ Listo para entregar</h3>
+ <p style="margin:0 0 8px;font-size:12.5px;color:var(--suave)">Se le envía este mensaje al cliente por el WhatsApp del negocio:</p>
+ <div class="wa-msg">Hola Carlos 👋, le escribe <b>RH Tecnology</b> 📱<br><br>Su <b>Redmi A7 Pro</b> ya está <b>listo</b> ✅ y puede pasar a recogerlo.<br><br><b>Lo que se le hizo:</b><br>• Se cambió el pin de carga<br>• Se cambió la tarjeta de carga<br>• Se probó: carga y funciona bien<br><br><b>Total:</b> $70.000 · <b>Abonó:</b> $20.000<br><b>Por pagar:</b> $50.000<br><br>Orden #0144.<br>📍 RH Tecnology, Corozal</div>
+ <div class="grande" style="background:#25d366;color:#032b12">Enviar por WhatsApp y marcar listo</div>
+ <div style="text-align:center;font-size:12px;color:var(--suave);margin-top:8px">Pasa a <b>Por entregar</b></div>
+</div>
+</section>
+<section class="pantalla" id="p6">
+<div class="enc"><img src="logo-rh.svg" alt=""><div><h1>🔧 Servicio técnico</h1><small>5 activos · 2 por entregar</small></div><div class="acc"><span class="bt">‹ Inicio</span></div></div>
+<div class="cuerpo">
+ <div class="tabs3"><span>Activos 5</span><span class="on">Por entregar 2</span><span>Entregados 128</span></div>
+ <div class="eq"><div class="top"><b>Redmi A7 Pro</b><span class="pill amarillo">Debe $50.000</span></div><div class="c">Carlos Pérez · 300 123 4567 · #0144</div><div class="t">🔧 Pin de carga + tarjeta de carga</div><div class="pie"><span>Total $70.000 · abonó $20.000 (efectivo)</span></div><div class="pie"><span>✉️ Avisado por WhatsApp hoy 11:02 a. m.</span></div></div>
+ <div class="eq"><div class="top"><b>iPhone XR</b><span class="pill verde">Pagado ✓</span></div><div class="c">Sofía Torres · 310 987 6543 · #0135</div><div class="t">🔧 Cambio de batería</div><div class="pie"><span>$120.000 · pagó todo por QR al dejarlo</span></div><div class="pie"><span>✉️ Avisado hace 3 días</span></div></div>
+</div>
+<div class="velo"></div>
+<div class="hoja">
+ <h3>💵 Cobrar y entregar · Redmi A7 Pro</h3>
+ <div class="plata" style="margin-bottom:8px"><div>Total<b>$70.000</b></div><div>Abonó<b>$20.000</b></div><div>Falta<b style="color:var(--aviso)">$50.000</b></div></div>
+ <label style="font-size:11px;color:var(--suave)">¿Cómo pagó lo que faltaba?</label>
+ <div class="metodos"><span>💵 Efectivo</span><span class="on">📱 QR</span><span>🏦 Transf.</span><span>➗ Mixto</span></div>
+ <div class="dos" style="margin-top:6px"><div class="campo"><label>Valor recibido</label><div class="in">$50.000</div></div><div class="campo"><label>Entregó</label><div class="in">Andrés</div></div></div>
+ <div class="grande" style="background:var(--exito);color:#04261a">✓ Pagado · Entregar celular</div>
+ <div style="text-align:center;font-size:11.5px;color:var(--suave);margin-top:6px">Pasa automáticamente a <b>Entregados</b></div>
+</div>
+</section>
+<section class="pantalla" id="p7">
+<div class="enc"><img src="logo-rh.svg" alt=""><div><h1>🔧 Servicio técnico</h1><small>5 activos · 2 por entregar</small></div><div class="acc"><span class="bt">‹ Inicio</span></div></div>
+<div class="cuerpo">
+ <div class="buscar">🔍 Buscar nombre, teléfono, IMEI u orden…</div>
+ <div class="tabs3"><span>Activos 5</span><span>Por entregar 2</span><span class="on">Entregados 128</span></div>
+ <h3 style="font-size:11px;letter-spacing:.08em;color:var(--suave);margin:12px 0 0">HOY</h3>
+ <div class="eq"><div class="top"><b>Redmi A7 Pro</b><span class="pill verde">Pagado</span></div><div class="c">Carlos Pérez · 300 123 4567 · #0144</div><div class="pie"><span>Pin + tarjeta de carga · 📱 QR</span><b>$70.000</b></div><div class="pie"><span>Entregó Andrés 3:40 p. m.</span></div></div>
+ <h3 style="font-size:11px;letter-spacing:.08em;color:var(--suave);margin:12px 0 0">AYER</h3>
+ <div class="eq"><div class="top"><b>Samsung A54</b><span class="pill verde">Pagado</span></div><div class="c">Luis Vega · 314 888 1212 · #0138</div><div class="pie"><span>Cambio de pantalla · 💵 efectivo</span><b>$150.000</b></div><div class="pie"><span>Entregó Patricia</span></div></div>
+ <div class="eq"><div class="top"><b>Moto E13</b><span class="pill verde">Pagado</span></div><div class="c">Diana Rojas · 302 111 4545 · #0133</div><div class="pie"><span>Pin de carga · ➗ efectivo + QR</span><b>$45.000</b></div><div class="pie"><span>Entregó Osman</span></div></div>
+ <div class="tarjeta" style="text-align:center;font-size:12px"><span class="candado">🔒 Los entregados quedan guardados para siempre: no se pueden borrar.</span></div>
+</div>
+<div class="nota"><b>7 · Entregados.</b> Archivo permanente. Tocando uno se ve todo: cliente, contraseña, historial del arreglo, fotos y pagos.</div>
+</section>
+<section class="pantalla" id="p8">
+<div class="enc"><div><h1>#0144 · Redmi A7 Pro</h1><small>🔒 Entregado 27 nov · no se puede borrar</small></div><div class="acc"><span class="bt">‹ Volver</span></div></div>
+<div class="cuerpo" style="padding-top:0">
+ <div class="tarjeta"><h4>👤 Cliente y equipo</h4><div class="kv"><span>Cliente</span><span>Carlos Pérez · 300 123 4567</span><span>Contraseña</span><span>•••• <span style="color:var(--celeste)">ver</span></span><span>Equipo</span><span>Redmi A7 Pro · azul · IMEI …7731</span><span>Llegó con</span><span>SIM, forro · Otro: llavero</span></div></div>
+ <div class="tarjeta"><h4>🧾 Lo que se hizo</h4>
+  <div class="linea" style="--c:var(--suave)"><small>25 nov · Andrés</small>Llegó por pin de carga. Cotizado $45.000.</div>
+  <div class="linea" style="--c:var(--celeste)"><small>25 nov · Osman</small>Se cambió el pin. No funcionó. Tarjeta de carga mala.</div>
+  <div class="linea" style="--c:var(--aviso)"><small>25 nov · Osman</small>💲 $45.000 → $70.000 · cliente aceptó.</div>
+  <div class="linea" style="--c:var(--exito)"><small>26 nov · Osman</small>Se cambió la tarjeta. Funciona ✓ · WhatsApp enviado.</div>
+ </div>
+ <div class="tarjeta"><h4>💵 Pagos</h4><div class="kv"><span>25 nov</span><span>Abono $20.000 · 💵 efectivo · Andrés</span><span>27 nov</span><span>Resto $50.000 · 📱 QR · Andrés</span><span>Total</span><span><b>$70.000 pagado ✓</b></span></div></div>
+ <div class="tarjeta"><h4>📷 Fotos (4)</h4><div class="fotos"><div class="foto">Al<br>recibir</div><div class="foto">Pin<br>viejo</div><div class="foto">Tarjeta<br>dañada</div><div class="foto">Ya<br>carga</div></div></div>
+ <div class="acciones"><div class="acc wa">💬 WhatsApp</div><div class="acc pdf">📄 Recibo PDF</div></div>
+</div>
+</section>
+<section class="pantalla" id="p9">
+<div class="enc"><div><h1>＋ Recibir equipo</h1><small>Orden #0145 · la IA llena, tú revisas</small></div><div class="acc"><span class="bt">Cancelar</span></div></div>
+<div class="cuerpo" style="padding-top:0">
+ <div class="voz"><div style="background:var(--degradado);color:#fff">🎙️ Dictar</div><div style="background:var(--sup2)">📷 Foto equipo</div><div style="background:var(--sup2)">⌨️ Escribir</div></div>
+ <div class="dos"><div class="campo"><label>Cliente</label><div class="in ia">Juan Díaz</div></div><div class="campo"><label>Teléfono (WhatsApp)</label><div class="in ia">301 555 2233</div></div></div>
+ <div class="dos"><div class="campo"><label>Equipo</label><div class="in ia">Samsung A15 · negro</div></div><div class="campo"><label>Contraseña / patrón</label><div class="in ia">Patrón en L 🔒</div></div></div>
+ <div class="campo"><label>¿Qué tiene? (lo que dice el cliente)</label><div class="in ia">No enciende</div></div>
+ <div class="dos"><div class="campo"><label>Precio cotizado</label><div class="in ia">$50.000</div></div><div class="campo"><label>Abono · cómo pagó</label><div class="in">$20.000 · 💵</div></div></div>
+ <div class="campo"><label>Llegó con</label><div class="checks"><span class="on">SIM</span><span>Memoria</span><span class="on">Forro</span><span>Cargador</span><span>Caja</span><span class="on">＋ Otro</span></div><div class="in" style="margin-top:5px">Otro: <span style="color:var(--texto)">llavero y protector de cámara</span></div></div>
+ <div class="campo"><label>Estado al recibir</label><div class="checks"><span>Pantalla rota</span><span class="on">Rayones</span><span>Golpes</span><span>Mojado</span><span class="on">No enciende</span><span class="on">＋ Otro</span></div><div class="in" style="margin-top:5px">Otro: <span style="color:var(--texto)">tapa trasera despegada</span></div></div>
+ <div class="acc pdf" style="margin-top:10px">Guardar · 📷 fotos al recibir · recibo</div>
+</div>
+</section></body></html>

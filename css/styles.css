@@ -475,6 +475,24 @@ body.grabando .barra-texto::placeholder { color: var(--peligro); }
 }
 .toast.visible { opacity: 1; transform: translate(-50%, 0); }
 
+/* Panel de diagnóstico (?debug) */
+.panel-debug {
+  position: fixed;
+  left: 8px; right: 8px; top: calc(8px + var(--seguro-arriba));
+  z-index: 100;
+  max-height: 40vh;
+  overflow: auto;
+  margin: 0;
+  padding: 8px;
+  border: 1px solid var(--peligro);
+  border-radius: 8px;
+  background: rgb(0 0 0 / 0.88);
+  color: #a7f3d0;
+  font: 11px/1.4 ui-monospace, Menlo, monospace;
+  white-space: pre-wrap;
+  pointer-events: none;
+}
+
 /* 11. Pantallas grandes ---------------------------------------- */
 @media (min-width: 720px) {
   .pestanas { justify-content: center; }

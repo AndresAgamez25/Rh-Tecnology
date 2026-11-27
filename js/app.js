@@ -11,6 +11,24 @@ import * as media from './media.js';
 import * as ui from './ui.js';
 
 const $ = (id) => document.getElementById(id);
+
+// ── Diagnóstico: abre la app con ?debug para ver paso a paso qué pasa ──
+const DEBUG = new URLSearchParams(location.search).has('debug');
+const panelDebug = DEBUG ? document.body.appendChild(Object.assign(document.createElement('pre'), { className: 'panel-debug' })) : null;
+function log(...partes) {
+  if (!panelDebug) return;
+  const hora = new Date().toLocaleTimeString('es-CO');
+  panelDebug.textContent += `${hora} ${partes.map((p) => (p instanceof Error ? `${p.name}: ${p.message}` : typeof p === 'object' ? JSON.stringify(p) : String(p))).join(' ')}\n`;
+}
+if (DEBUG) {
+  const errorOriginal = console.error.bind(console);
+  console.error = (...a) => { log('❌', ...a); errorOriginal(...a); };
+  const avisoOriginal = console.warn.bind(console);
+  console.warn = (...a) => { log('⚠️', ...a); avisoOriginal(...a); };
+  window.addEventListener('error', (e) => log('❌ error:', e.message, e.filename?.split('/').pop(), e.lineno));
+  window.addEventListener('unhandledrejection', (e) => log('❌ promesa:', e.reason));
+  log('debug activo · vista:', document.body.dataset.vista);
+}
 const elementos = {
   pestanas: $('pestanas'),
   lista: $('lista'),
@@ -388,6 +406,7 @@ elementos.foto.addEventListener('change', async () => {
 
 /** Cambia la vista visible: 'cargando' | 'login' | 'app' */
 function mostrarVista(vista) {
+  log('vista →', vista);
   document.body.dataset.vista = vista;
   if (vista === 'login') elementos.email.focus();
 }
@@ -405,10 +424,12 @@ async function entrar(evento) {
   elementos.btnLogin.textContent = 'Entrando…';
   try {
     const usuario = await auth.iniciarSesion(email, password);
+    log('login ok:', usuario?.email);
     elementos.password.value = '';
     // Seguimos de una vez (sin esperar el aviso de Supabase)
-    alCambiarUsuario(usuario);
+    if (usuario) alCambiarUsuario(usuario);
   } catch (error) {
+    log('login falló:', error);
     elementos.errorLogin.textContent = error.message;
   } finally {
     elementos.btnLogin.disabled = false;
@@ -424,7 +445,8 @@ async function salir() {
 }
 
 /** Se ejecuta cada vez que alguien entra o sale. */
-async function alCambiarUsuario(usuario) {
+async function alCambiarUsuario(usuario, evento = 'directo') {
+  log('usuario:', evento, usuario?.email ?? '(ninguno)');
   if (!usuario) {
     estado.usuarioId = null;
     await datos.detener();
@@ -441,6 +463,7 @@ async function alCambiarUsuario(usuario) {
   mostrarVista('cargando');
   try {
     const nombre = await auth.obtenerPerfil();
+    log('perfil:', nombre);
     if (!nombre) {
       // Tiene cuenta pero NO está en usuarios_permitidos
       estado.usuarioId = null;
@@ -452,12 +475,14 @@ async function alCambiarUsuario(usuario) {
     elementos.usuario.textContent = `Hola, ${nombre}`;
     elementos.salir.hidden = false;
     await datos.usar('supabase');
+    log('datos listos');
     estado.modo = 'supabase';
     estado.items = await datos.listar();
+    log('faltantes:', estado.items.length);
     render();
     mostrarVista('app');
   } catch (error) {
-    console.error(error);
+    console.error('al entrar:', error);
     estado.usuarioId = null;
     elementos.errorLogin.textContent = 'No se pudo cargar la lista. Revisa tu conexión.';
     mostrarVista('login');

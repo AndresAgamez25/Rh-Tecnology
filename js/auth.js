@@ -20,7 +20,7 @@ export async function iniciarSesion(email, password) {
     password,
   });
   if (error) throw new Error(traducirError(error));
-  return data.user;
+  return data?.user ?? null;
 }
 
 /**
@@ -51,6 +51,6 @@ export function alCambiarUsuario(fn) {
     if (!['INITIAL_SESSION', 'SIGNED_IN', 'SIGNED_OUT'].includes(evento)) return;
     // Supabase recomienda no hacer otras llamadas DENTRO de este callback
     // (puede bloquearse); por eso lo pasamos al siguiente ciclo con setTimeout.
-    setTimeout(() => fn(sesion?.user ?? null), 0);
+    setTimeout(() => fn(sesion?.user ?? null, evento), 0);
   });
 }

@@ -12,7 +12,21 @@
 
 const GEMINI_API_KEY = Deno.env.get('GEMINI_API_KEY') ?? '';
 // Se puede cambiar el modelo sin tocar código con el secret GEMINI_MODEL
-let modeloActual = Deno.env.get('GEMINI_MODEL') ?? 'gemini-flash-latest';
+// Modelos "Lite": en las pruebas respondieron en ~1 s con resultados correctos,
+// mientras los grandes tardaban 15-45 s o estaban saturados.
+const MODELOS = [
+  Deno.env.get('GEMINI_MODEL'),
+  'gemini-3.5-flash-lite',
+  'gemini-3.1-flash-lite',
+].filter((m, i, lista): m is string => Boolean(m) && lista.indexOf(m) === i);
+let modeloActual = MODELOS[0];
+let modeloDescubierto: string | null = null;
+
+/** Lista de modelos a probar; si todos desaparecieran, busca uno disponible. */
+async function candidatos() {
+  if (modeloDescubierto) return [...MODELOS, modeloDescubierto];
+  return MODELOS;
+}
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? '';
 const SUPABASE_ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY') ?? '';
 // Solo para pruebas locales (por defecto, la API real de Google)
@@ -102,22 +116,26 @@ const ESQUEMA = {
       type: 'ARRAY',
       items: {
         type: 'OBJECT',
+        // TODOS los campos son obligatorios (vacíos "" si no aplican):
+        // así los modelos rápidos no "olvidan" el modelo o el quedan.
         properties: {
           tipo: { type: 'STRING', enum: ['agregar', 'quitar', 'vaciar'] },
-          id: { type: 'STRING' },
-          categoria: { type: 'STRING', enum: Object.keys(SUBTIPOS) },
-          subtipo: { type: 'STRING', nullable: true },
-          modelo: { type: 'STRING' },
-          detalle: { type: 'STRING' },
-          quedan: { type: 'STRING' },
+          id: { type: 'STRING', description: 'Solo para quitar: id exacto de la lista. Si no, ""' },
+          categoria: { type: 'STRING', description: `Una de: ${Object.keys(SUBTIPOS).join(', ')}. Para quitar/vaciar: ""` },
+          subtipo: { type: 'STRING', description: 'Subtipo válido de la categoría o "" si no aplica' },
+          modelo: { type: 'STRING', description: 'Modelo del celular o nombre del producto, con la escritura oficial de la marca' },
+          detalle: { type: 'STRING', description: 'Detalles técnicos o ""' },
+          quedan: { type: 'STRING', description: 'Colores o cantidades que aún quedan, o ""' },
         },
-        required: ['tipo'],
+        required: ['tipo', 'id', 'categoria', 'subtipo', 'modelo', 'detalle', 'quedan'],
+        propertyOrdering: ['tipo', 'id', 'categoria', 'subtipo', 'modelo', 'detalle', 'quedan'],
       },
     },
     respuesta: { type: 'STRING' },
-    transcripcion: { type: 'STRING' },
+    transcripcion: { type: 'STRING', description: 'Solo si hubo audio: lo que dijo. Si no, ""' },
   },
-  required: ['acciones', 'respuesta'],
+  required: ['acciones', 'respuesta', 'transcripcion'],
+  propertyOrdering: ['transcripcion', 'acciones', 'respuesta'],
 };
 
 // ── Validación de lo que devuelve la IA ──────────────────────
@@ -166,54 +184,47 @@ async function preguntarAGemini(mensaje: string, audio: Archivo | null, imagen: 
   if (audio) partes.push({ text: 'AUDIO del usuario:' }, { inline_data: { mime_type: audio.mime, data: audio.base64 } });
   if (imagen) partes.push({ text: 'FOTO del producto:' }, { inline_data: { mime_type: imagen.mime, data: imagen.base64 } });
 
-  // Sin "pensar": para clasificar productos no hace falta razonar, y
-  // pensar agrega varios segundos. Si el modelo no acepta ese ajuste
-  // (algunos no permiten apagarlo), reintentamos sin él.
-  const pedir = (sinPensar: boolean) => fetch(
-    `${GEMINI_BASE}/v1beta/models/${modeloActual}:generateContent`,
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-goog-api-key': GEMINI_API_KEY },
-      body: JSON.stringify({
-        system_instruction: { parts: [{ text: INSTRUCCIONES }] },
-        contents: [{ role: 'user', parts: partes }],
-        generationConfig: {
-          temperature: 0.1,
-          responseMimeType: 'application/json',
-          responseSchema: ESQUEMA,
-          ...(sinPensar && { thinkingConfig: { thinkingBudget: 0 } }),
-        },
-      }),
-      signal: AbortSignal.timeout(25_000),
-    },
-  );
+  const cuerpo = JSON.stringify({
+    system_instruction: { parts: [{ text: INSTRUCCIONES }] },
+    contents: [{ role: 'user', parts: partes }],
+    generationConfig: { temperature: 0.1, responseMimeType: 'application/json', responseSchema: ESQUEMA },
+  });
 
-  let r = await pedir(true);
-  // 404 = ese nombre de modelo no existe para esta clave → buscamos uno Flash disponible
-  if (r.status === 404) {
-    const otro = await buscarModeloFlash();
-    if (otro && otro !== modeloActual) {
-      console.warn(`Modelo ${modeloActual} no disponible; uso ${otro}`);
-      modeloActual = otro;
-      r = await pedir(true);
+  // Probamos los modelos en orden: si uno está saturado (503), sin cuota (429),
+  // ya no existe (404) o tarda demasiado, pasamos al siguiente.
+  let ultimoDetalle = 'Gemini no respondió';
+  for (const modelo of await candidatos()) {
+    let r: Response;
+    try {
+      r = await fetch(`${GEMINI_BASE}/v1beta/models/${modelo}:generateContent`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-goog-api-key': GEMINI_API_KEY },
+        body: cuerpo,
+        signal: AbortSignal.timeout(15_000),
+      });
+    } catch (error) {
+      console.warn(`${modelo}: ${error}`);
+      ultimoDetalle = `Gemini tardó demasiado (${modelo})`;
+      continue;
     }
-  }
-  if (r.status === 400) {
-    const texto400 = await r.text();
-    // Solo reintentamos si el problema fue el ajuste de "pensar"
-    if (/thinking/i.test(texto400)) {
-      console.warn('Gemini rechazó thinkingBudget=0, reintento sin él');
-      r = await pedir(false);
-    } else {
-      throw Object.assign(new Error('Gemini 400'), { detalle: resumirError(400, texto400) });
+    if (r.ok) {
+      modeloActual = modelo;
+      return leerRespuesta(await r.json());
     }
+    const texto = await r.text();
+    ultimoDetalle = resumirError(r.status, texto);
+    console.warn(`${modelo}: ${ultimoDetalle}`);
+    if (![404, 429, 500, 503].includes(r.status)) break; // 400/403: otro modelo no lo arregla
   }
-  if (!r.ok) {
-    const cuerpo = await r.text();
-    console.error('Gemini', r.status, cuerpo.slice(0, 500));
-    throw Object.assign(new Error(`Gemini ${r.status}`), { detalle: resumirError(r.status, cuerpo) });
+  // Si TODOS los modelos ya no existen (Google los retiró), buscamos uno nuevo para la próxima
+  if (/Gemini 404/.test(ultimoDetalle) && !modeloDescubierto) {
+    modeloDescubierto = await buscarModeloFlash();
+    if (modeloDescubierto) console.warn(`Próxima vez se probará también ${modeloDescubierto}`);
   }
-  const datos = await r.json();
+  throw Object.assign(new Error('Gemini'), { detalle: ultimoDetalle });
+}
+
+function leerRespuesta(datos: Record<string, any>) {
   const salida = datos?.candidates?.[0]?.content?.parts?.map((p: { text?: string }) => p.text ?? '').join('') ?? '';
   return JSON.parse(salida);
 }
@@ -232,7 +243,7 @@ async function buscarModeloFlash(): Promise<string | null> {
       .map((m: { name: string }) => m.name.replace(/^models\//, ''))
       .filter((n: string) => n.includes('flash') && !/(image|tts|audio|live|embedding|thinking)/.test(n));
     // Preferimos estables (sin "preview"/"exp") y no "lite"; los más nuevos primero
-    const puntaje = (n: string) => (/(preview|exp)/.test(n) ? 2 : 0) + (n.includes('lite') ? 1 : 0);
+    const puntaje = (n: string) => (/(preview|exp|latest)/.test(n) ? 2 : 0) + (n.includes('lite') ? 0 : 1);
     nombres.sort((a, b) => puntaje(a) - puntaje(b) || b.localeCompare(a, 'en', { numeric: true }));
     return nombres[0] ?? null;
   } catch {

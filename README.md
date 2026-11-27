@@ -126,7 +126,10 @@ de borrar, y el clasificador de respaldo usa el mismo camino. Gemini responde co
 1. Crea una API key gratis en [aistudio.google.com/apikey](https://aistudio.google.com/apikey).
 2. En Supabase → **Edge Functions → Secrets → Add new secret**:
    `GEMINI_API_KEY` = tu clave.
-3. (Opcional) `GEMINI_MODEL` para cambiar el modelo. Por defecto usa `gemini-flash-latest`.
+3. (Opcional) `GEMINI_MODEL` para probar otro modelo primero. Por defecto usa `gemini-3.5-flash-lite` y, si
+   está saturado o sin cuota, `gemini-3.1-flash-lite`. En pruebas reales los modelos *Lite* respondieron en
+   ~1 s (texto) y ~2 s (foto) con resultados correctos; los modelos Flash grandes tardaban 15-45 s o estaban
+   saturados.
 
 ### 3. Desplegar la Edge Function
 

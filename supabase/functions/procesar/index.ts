@@ -12,7 +12,7 @@
 
 const GEMINI_API_KEY = Deno.env.get('GEMINI_API_KEY') ?? '';
 // Se puede cambiar el modelo sin tocar código con el secret GEMINI_MODEL
-const GEMINI_MODEL = Deno.env.get('GEMINI_MODEL') ?? 'gemini-flash-latest';
+let modeloActual = Deno.env.get('GEMINI_MODEL') ?? 'gemini-flash-latest';
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? '';
 const SUPABASE_ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY') ?? '';
 // Solo para pruebas locales (por defecto, la API real de Google)
@@ -170,7 +170,7 @@ async function preguntarAGemini(mensaje: string, audio: Archivo | null, imagen: 
   // pensar agrega varios segundos. Si el modelo no acepta ese ajuste
   // (algunos no permiten apagarlo), reintentamos sin él.
   const pedir = (sinPensar: boolean) => fetch(
-    `${GEMINI_BASE}/v1beta/models/${GEMINI_MODEL}:generateContent`,
+    `${GEMINI_BASE}/v1beta/models/${modeloActual}:generateContent`,
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-goog-api-key': GEMINI_API_KEY },
@@ -189,17 +189,67 @@ async function preguntarAGemini(mensaje: string, audio: Archivo | null, imagen: 
   );
 
   let r = await pedir(true);
+  // 404 = ese nombre de modelo no existe para esta clave → buscamos uno Flash disponible
+  if (r.status === 404) {
+    const otro = await buscarModeloFlash();
+    if (otro && otro !== modeloActual) {
+      console.warn(`Modelo ${modeloActual} no disponible; uso ${otro}`);
+      modeloActual = otro;
+      r = await pedir(true);
+    }
+  }
   if (r.status === 400) {
-    console.warn('Gemini rechazó thinkingBudget=0, reintento sin él:', (await r.text()).slice(0, 200));
-    r = await pedir(false);
+    const texto400 = await r.text();
+    // Solo reintentamos si el problema fue el ajuste de "pensar"
+    if (/thinking/i.test(texto400)) {
+      console.warn('Gemini rechazó thinkingBudget=0, reintento sin él');
+      r = await pedir(false);
+    } else {
+      throw Object.assign(new Error('Gemini 400'), { detalle: resumirError(400, texto400) });
+    }
   }
   if (!r.ok) {
-    console.error('Gemini', r.status, (await r.text()).slice(0, 500));
-    throw new Error(`Gemini ${r.status}`);
+    const cuerpo = await r.text();
+    console.error('Gemini', r.status, cuerpo.slice(0, 500));
+    throw Object.assign(new Error(`Gemini ${r.status}`), { detalle: resumirError(r.status, cuerpo) });
   }
   const datos = await r.json();
   const salida = datos?.candidates?.[0]?.content?.parts?.map((p: { text?: string }) => p.text ?? '').join('') ?? '';
   return JSON.parse(salida);
+}
+
+/** Pide a Google la lista de modelos de esta clave y elige un Flash estable. */
+async function buscarModeloFlash(): Promise<string | null> {
+  try {
+    const r = await fetch(`${GEMINI_BASE}/v1beta/models?pageSize=200`, {
+      headers: { 'x-goog-api-key': GEMINI_API_KEY },
+      signal: AbortSignal.timeout(8_000),
+    });
+    if (!r.ok) return null;
+    const { models = [] } = await r.json();
+    const nombres: string[] = models
+      .filter((m: { supportedGenerationMethods?: string[] }) => m.supportedGenerationMethods?.includes('generateContent'))
+      .map((m: { name: string }) => m.name.replace(/^models\//, ''))
+      .filter((n: string) => n.includes('flash') && !/(image|tts|audio|live|embedding|thinking)/.test(n));
+    // Preferimos estables (sin "preview"/"exp") y no "lite"; los más nuevos primero
+    const puntaje = (n: string) => (/(preview|exp)/.test(n) ? 2 : 0) + (n.includes('lite') ? 1 : 0);
+    nombres.sort((a, b) => puntaje(a) - puntaje(b) || b.localeCompare(a, 'en', { numeric: true }));
+    return nombres[0] ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/** Explicación corta y segura del error de Gemini (nunca incluye la clave). */
+function resumirError(status: number, cuerpo: string) {
+  let msg = '';
+  try { msg = JSON.parse(cuerpo)?.error?.message ?? ''; } catch { /* no era JSON */ }
+  const pista = status === 429 ? 'se acabó la cuota gratis por ahora'
+    : status === 403 || /api key/i.test(msg) ? 'la clave de Gemini no es válida o no tiene permiso'
+    : status === 404 ? 'el modelo no está disponible'
+    : status === 400 ? 'Gemini no aceptó el contenido'
+    : 'error del servicio de Gemini';
+  return `Gemini ${status}: ${pista}${msg ? ` (${msg.slice(0, 120)})` : ''}`;
 }
 
 function leerArchivo(v: unknown, prefijo: string): Archivo | null {
@@ -254,11 +304,14 @@ Deno.serve(async (req) => {
       respuesta: texto(resultado?.respuesta, 200) || 'Listo.',
       transcripcion: texto(resultado?.transcripcion, MAX_TEXTO),
       tiempos: { base: msBase, ia: msIA },
+      modelo: modeloActual,
     });
   } catch (error) {
     const status = (error as { status?: number }).status;
     if (status === 401 || status === 403) return responder({ error: 'Sesión vencida o sin permiso' }, 401);
     console.error(error);
-    return responder({ error: 'No se pudo procesar con IA' }, 502);
+    const detalle = (error as { detalle?: string }).detalle
+      ?? (error instanceof SyntaxError ? 'Gemini respondió algo que no es JSON' : (error as Error).message);
+    return responder({ error: 'No se pudo procesar con IA', detalle, modelo: modeloActual }, 502);
   }
 });

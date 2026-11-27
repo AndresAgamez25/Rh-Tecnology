@@ -21,7 +21,12 @@ export async function procesarConIA(entrada) {
     setTimeout(() => rechazar(new Error('La IA tardó demasiado')), TIEMPO_MAXIMO));
 
   const { data, error } = await Promise.race([llamada, limite]);
-  if (error) throw error;
+  if (error) {
+    // La función devuelve { detalle } con la razón (p. ej. "Gemini 429: se acabó la cuota")
+    let detalle = '';
+    try { detalle = (await error.context?.json?.())?.detalle ?? ''; } catch { /* sin cuerpo */ }
+    throw new Error(detalle || error.message || 'La IA no respondió');
+  }
   if (!data || !Array.isArray(data.acciones)) throw new Error('Respuesta inválida de la IA');
   return data;
 }

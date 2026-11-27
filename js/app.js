@@ -278,11 +278,13 @@ async function interpretar(entrada) {
     try {
       const inicio = performance.now();
       const r = await procesarConIA(entrada);
+      estado.ultimoErrorIA = '';
       log(`IA: ${Math.round(performance.now() - inicio)} ms en total`, r.tiempos ?? '');
       return { ...r, conIA: true };
     } catch (error) {
       console.warn('La IA falló; uso el respaldo:', error);
-      if (!entrada.texto) throw new Error('sin-respaldo');
+      estado.ultimoErrorIA = error.message;
+      if (!entrada.texto) throw Object.assign(new Error('sin-respaldo'), { razon: error.message });
     }
   }
   return { ...clasificar(entrada.texto, estado.items), conIA: false };
@@ -296,7 +298,9 @@ async function procesarMensaje(entrada) {
 
   let mensaje = respuesta;
   if (transcripcion && entrada.audio) mensaje = `🎙️ «${transcripcion}» → ${respuesta}`;
-  if (!conIA && estado.modo === 'supabase') mensaje += ' (sin IA)';
+  if (!conIA && estado.modo === 'supabase') {
+    mensaje += ` (sin IA${estado.ultimoErrorIA ? ` — ${estado.ultimoErrorIA}` : ''})`;
+  }
   return { aplicado, mensaje };
 }
 
@@ -316,8 +320,8 @@ async function ejecutar(entrada, { limpiarTexto = false } = {}) {
   } catch (error) {
     console.error(error);
     ui.toast(error.message === 'sin-respaldo'
-      ? 'La IA no respondió. Intenta de nuevo o escríbelo.'
-      : 'Algo salió mal. Intenta de nuevo.');
+      ? `La IA no respondió${error.razon ? ` — ${error.razon}` : ''}. Intenta de nuevo o escríbelo.`
+      : 'Algo salió mal. Intenta de nuevo.', 8000);
   } finally {
     ponerEnviando(false);
   }

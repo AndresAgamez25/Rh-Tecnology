@@ -7,6 +7,7 @@
 // ─────────────────────────────────────────────────────────────
 import { el } from '../ui.js';
 import { pesos } from './whatsapp.js';
+import { hacerDinero } from '../dinero.js';
 
 // Atajos: tocar uno agrega una fila con ese nombre (luego se escribe el precio)
 export const TRABAJOS_COMUNES = ['Pantalla', 'Tapa', 'Pin de carga', 'Batería', 'Cámara', 'Software', 'Revisión'];
@@ -47,9 +48,10 @@ export function crearEditorTrabajos({ trabajos = [], descuento = 0, onCambio } =
   const lista = el('div', { class: 'st-editor-filas' });
   const totalNodo = el('div', { class: 'st-editor-total' });
   const entradaDescuento = el('input', {
-    class: 'st-input', type: 'number', inputmode: 'numeric', min: 0, placeholder: '0', 'aria-label': 'Descuento',
+    class: 'st-input', placeholder: '0', 'aria-label': 'Descuento',
     oninput: (e) => { desc = Math.max(0, Number(e.target.value) || 0); pintarTotal(); },
   });
+  hacerDinero(entradaDescuento);
   if (desc) entradaDescuento.value = String(desc);
 
   const valor = () => {
@@ -71,8 +73,9 @@ export function crearEditorTrabajos({ trabajos = [], descuento = 0, onCambio } =
     lista.replaceChildren(...filas.map((f, i) => {
       const nombre = el('input', { class: 'st-input', value: f.descripcion, placeholder: 'Ej: Pantalla', 'aria-label': `Trabajo ${i + 1}`,
         oninput: (e) => { f.descripcion = e.target.value; pintarTotal(); } });
-      const precio = el('input', { class: 'st-input st-precio', type: 'number', inputmode: 'numeric', min: 0, placeholder: '$',
+      const precio = el('input', { class: 'st-input st-precio', placeholder: '$',
         'aria-label': `Precio del trabajo ${i + 1}`, oninput: (e) => { f.precio = e.target.value; pintarTotal(); } });
+      hacerDinero(precio);
       if (f.precio !== '' && f.precio != null) precio.value = String(f.precio);
       if (i === enfocar) requestAnimationFrame(() => (f.descripcion ? precio : nombre).focus());
       return el('div', { class: 'st-editor-fila' }, nombre, precio,

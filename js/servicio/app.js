@@ -437,7 +437,7 @@ async function editarTrabajos(o) {
 
 async function registrarAbono(o) {
   const r = await abrirHoja('＋ Registrar abono', (cerrar) => {
-    const monto = campoTexto('Valor', { type: 'number', inputmode: 'numeric', min: 1 });
+    const monto = campoTexto('Valor', { dinero: true, min: 1 });
     let metodo = 'efectivo';
     const chips = selectorUnico(Object.entries(METODOS), metodo, (v) => { metodo = v; });
     return [monto.nodo, el('span', { class: 'st-etiqueta', text: 'Cómo pagó' }), chips,
@@ -579,7 +579,7 @@ async function marcarListo(o) {
 async function devolver(o) {
   const r = await abrirHoja('↩️ Devolver sin reparar', (cerrar) => {
     const motivo = campoTexto('¿Por qué no se reparó? (obligatorio)', { multilinea: true, placeholder: 'Ej: No tiene arreglo / el cliente no aceptó el precio' });
-    const cobro = campoTexto('Se cobra (revisión)', { type: 'number', inputmode: 'numeric', value: 0, min: 0 });
+    const cobro = campoTexto('Se cobra (revisión)', { dinero: true, value: 0, min: 0 });
     const avisar = el('input', { type: 'checkbox', checked: Boolean(o.telefono) });
     return [motivo.nodo, cobro.nodo, el('label', { class: 'st-check' }, avisar, 'Avisar al cliente por WhatsApp'),
       botonesHoja(cerrar, 'Devolver', () => {
@@ -615,10 +615,10 @@ async function cobrarYEntregar(o) {
   const pendiente = falta(o);
   const r = await abrirHoja(`💵 Cobrar y entregar · ${o.equipo}`, (cerrar) => {
     let metodo = 'efectivo';
-    const montos = { efectivo: campoTexto('💵 Efectivo', { type: 'number', inputmode: 'numeric', min: 0 }),
-      qr: campoTexto('📱 QR', { type: 'number', inputmode: 'numeric', min: 0 }),
-      transferencia: campoTexto('🏦 Transferencia', { type: 'number', inputmode: 'numeric', min: 0 }) };
-    const unico = campoTexto('Valor recibido', { type: 'number', inputmode: 'numeric', value: pendiente, min: 0 });
+    const montos = { efectivo: campoTexto('💵 Efectivo', { dinero: true, min: 0 }),
+      qr: campoTexto('📱 QR', { dinero: true, min: 0 }),
+      transferencia: campoTexto('🏦 Transferencia', { dinero: true, min: 0 }) };
+    const unico = campoTexto('Valor recibido', { dinero: true, value: pendiente, min: 0 });
     const zona = el('div');
     const pintar = () => zona.replaceChildren(...(metodo === 'mixto' ? Object.values(montos).map((m) => m.nodo) : [unico.nodo]));
     pintar();
@@ -811,7 +811,7 @@ async function abrirRecibir() {
       el('div', { class: 'dos' }, campo('equipo', 'Equipo', { placeholder: 'Ej: Redmi 13C · azul' }), campo('imei', 'IMEI (opcional)', { placeholder: '*#06#' })),
       campo('problema', '¿Qué tiene? (lo que dice el cliente)', { multilinea: true }),
       el('span', { class: 'st-etiqueta', text: '🧾 Trabajos y precios (puedes agregar varios)' }), editor.nodo,
-      campo('abono', 'Abono', { type: 'number', inputmode: 'numeric', min: 0 }),
+      campo('abono', 'Abono', { dinero: true, min: 0 }),
       el('span', { class: 'st-etiqueta', text: 'Cómo pagó el abono' }), metodoCaja,
       el('span', { class: 'st-etiqueta', text: 'Técnico' }), tecnicoCaja,
       el('span', { class: 'st-etiqueta', text: '🔒 Bloqueo del celular' }), zonaClaves,

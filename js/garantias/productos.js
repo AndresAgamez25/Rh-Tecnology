@@ -265,7 +265,7 @@ export function abrirFormulario(ctx, d = null) {
       selectorUnico(Object.entries(TIPOS_PRODUCTO), f.tipo, (v) => { f.tipo = v; }),
       campo('producto', 'Producto (marca y modelo) *', { placeholder: 'Ej: Cable USB-C 1 m Samsung', autocomplete: 'off' }),
       el('div', { class: 'dos' },
-        campo('costo', 'Cuánto costó (c/u)', { type: 'number', inputmode: 'numeric', min: 0 }),
+        campo('costo', 'Cuánto costó (c/u)', { dinero: true }),
         campo('cantidad', 'Cantidad', { type: 'number', inputmode: 'numeric', min: 1 })),
       totalNodo,
       campo('proveedor', 'Local donde se compró', { placeholder: 'Ej: Mayorista El Centro', list: 'locales-devolucion', autocomplete: 'off' }), sugerencias,

@@ -3,13 +3,16 @@
 // campos de texto, botones de la hoja, selectores tipo "chip" y secciones.
 // ─────────────────────────────────────────────────────────────
 import { el } from '../ui.js';
+import { hacerDinero } from '../dinero.js';
 
 export function seccion(titulo, ...hijos) {
   return el('section', { class: 'tarjeta st-seccion' }, el('h4', { class: 'st-seccion-titulo', text: titulo }), ...hijos);
 }
 
+/** props.dinero = true: campo de plata que se ve con puntos al escribir (900.000). */
 export function campoTexto(etiqueta, props = {}) {
-  const entrada = el(props.multilinea ? 'textarea' : 'input', { class: 'st-input', rows: props.multilinea ? 3 : null, ...props, multilinea: null });
+  const entrada = el(props.multilinea ? 'textarea' : 'input', { class: 'st-input', rows: props.multilinea ? 3 : null, ...props, multilinea: null, dinero: null });
+  if (props.dinero) hacerDinero(entrada);
   if (props.value != null) entrada.value = String(props.value); // <textarea> no usa el atributo value
   return { nodo: el('label', { class: 'campo' }, el('span', { text: etiqueta }), entrada), entrada };
 }

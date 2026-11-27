@@ -461,7 +461,7 @@ async function editarDatos(g) {
       telefono: campoTexto('Teléfono', { value: g.telefono, inputmode: 'tel' }), tipo_otro: campoTexto('¿Qué es? (si es "Otro")', { value: g.tipo_otro }),
       equipo: campoTexto('Equipo (marca y modelo)', { value: g.equipo }), serial: campoTexto('IMEI / serial', { value: g.serial }),
       fecha_compra: campoTexto('Fecha de compra', { type: 'date', value: g.fecha_compra ?? '', max: aISO(new Date()) }),
-      valor_compra: campoTexto('Valor del aparato', { type: 'number', inputmode: 'numeric', value: g.valor_compra || '', min: 0 }),
+      valor_compra: campoTexto('Valor del aparato', { dinero: true, value: g.valor_compra || '', min: 0 }),
       factura: campoTexto('N.º de factura', { value: g.factura }),
       falla: campoTexto('¿Qué le pasa?', { multilinea: true, value: g.falla }), motivo: campoTexto('¿Por qué se manda a garantía?', { multilinea: true, value: g.motivo }),
     };
@@ -548,7 +548,7 @@ function abrirRecibir() {
       el('h3', { class: 'gr-subtitulo', text: '📦 Equipo y compra' }),
       el('div', { class: 'dos' }, campo('equipo', 'Marca y modelo', { placeholder: 'Ej: JBL Flip 6' }), campo('serial', 'IMEI / serial', { placeholder: 'Opcional' })),
       el('div', { class: 'dos' }, campo('fecha_compra', 'Fecha de compra', { type: 'date', max: aISO(new Date()) }),
-        campo('valor_compra', 'Valor del aparato', { type: 'number', inputmode: 'numeric', min: 0 })),
+        campo('valor_compra', 'Valor del aparato', { dinero: true, min: 0 })),
       campo('factura', 'N.º de factura o recibo (opcional)'),
       el('h3', { class: 'gr-subtitulo', text: '⚠️ La garantía' }),
       campo('falla', '¿Qué le pasa? (lo que dice el cliente) *', { multilinea: true, placeholder: 'Ej: No carga, se apaga solo' }),

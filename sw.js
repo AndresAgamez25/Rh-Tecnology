@@ -37,6 +37,7 @@ const ARCHIVOS = [
   './js/servicio/whatsapp.js',
   './js/servicio/trabajos.js',
   './js/orden.js',
+  './js/dinero.js',
   './js/servicio/formulario.js',
   './js/garantias/app.js',
   './js/garantias/datos.js',

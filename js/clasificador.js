@@ -71,6 +71,11 @@ const PALABRAS_SUBTIPO = {
     curvo: /\b(curv[oa]s?|curvad[oa]s?|curved?)\b/,
     sencillo: /\b(sencill[oa]s?|normal(es)?|basic[oa]s?|clear)\b/,
   },
+  cargadores: {
+    // "Completo" primero: "cargador completo con su cable" no es solo cabezote
+    completo: /\b(complet[oa]s?|con\s+(su\s+)?cable|kit|combo)\b/,
+    cabezote: /\b(cabezotes?|cubos?|adaptador(es)?|solo\s+(el\s+)?cabezote|sin\s+cable)\b/,
+  },
   audifonos: {
     inalambricos: /\b(inalambric[oa]s?|bluetooth|airpods?|buds|earbuds|tws)\b/,
     cable: /\b((de|con)\s+cable|alambric[oa]s?|cablead[oa]s?|jack)\b/,
@@ -186,14 +191,15 @@ function palabrasModelo(texto, categoria) {
   let t = texto
     .replace(new RegExp(`\\b(${AGREGAR}|${QUITAR})\\b`, 'g'), ' ')
     .replace(/[^\p{L}\p{N}\s.+-]/gu, ' ');
-  for (const [cat, re] of Object.entries(PALABRAS_CATEGORIA)) {
-    if (cat !== 'otros') t = t.replace(new RegExp(re.source, 'g'), ' ');
-  }
+  // Primero los subtipos ("con su cable" = cargador completo) y después las categorías.
   // En celulares la marca ES parte del modelo ("Redmi 13C"), no se quita
   if (categoria !== 'celulares') {
     for (const sub of Object.values(PALABRAS_SUBTIPO[categoria] ?? {})) {
       t = t.replace(new RegExp(sub.source, 'g'), ' ');
     }
+  }
+  for (const [cat, re] of Object.entries(PALABRAS_CATEGORIA)) {
+    if (cat !== 'otros') t = t.replace(new RegExp(re.source, 'g'), ' ');
   }
   return t.split(/\s+/).map((p) => p.replace(/^[.+-]+|[.+-]+$/g, '')).filter((p) => p && !RELLENO.has(p));
 }

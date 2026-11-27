@@ -184,3 +184,12 @@ test('vocabulario de vidrios y audífonos', () => {
   assert.deepEqual(uno('no hay earbuds').slice(0, 2), ['audifonos', 'inalambricos']);
   assert.deepEqual(uno('se acabaron los cascos de cable').slice(0, 2), ['audifonos', 'cable']);
 });
+
+test('cargadores: cabezote o cargador completo', () => {
+  const tipo = (t) => clasificar(t, []).acciones.map((a) => [a.categoria, a.subtipo, a.modelo]);
+  assert.deepEqual(tipo('falta cabezote samsung 25w'), [['cargadores', 'cabezote', 'Samsung']]);
+  assert.deepEqual(tipo('faltan cubos de carga rápida'), [['cargadores', 'cabezote', '']]);
+  assert.deepEqual(tipo('no hay cargador completo tipo c'), [['cargadores', 'completo', '']]);
+  assert.deepEqual(tipo('falta cargador iphone con su cable'), [['cargadores', 'completo', 'iPhone']]);
+  assert.deepEqual(tipo('no hay cargador tipo c'), [['cargadores', null, '']]);
+});

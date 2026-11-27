@@ -250,6 +250,7 @@ alter table public.faltantes add constraint faltantes_subtipo_check check (
     or (categoria = 'forros'    and subtipo in ('silicona','lujo'))
     or (categoria = 'vidrios'   and subtipo in ('sencillo','blindado','titanio','antiespia','curvo','camara'))
     or (categoria = 'audifonos' and subtipo in ('cable','inalambricos'))
+    or (categoria = 'cargadores' and subtipo in ('cabezote','completo'))
 );
 
 

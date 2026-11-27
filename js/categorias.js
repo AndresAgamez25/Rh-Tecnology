@@ -53,7 +53,14 @@ export const CATEGORIAS = [
     ],
   },
   { id: 'cables', nombre: 'Cables', subtipos: [] },
-  { id: 'cargadores', nombre: 'Cargadores', subtipos: [] },
+  {
+    id: 'cargadores',
+    nombre: 'Cargadores',
+    subtipos: [
+      { id: 'cabezote', nombre: 'Cabezote' },          // solo el cabezote (cubo)
+      { id: 'completo', nombre: 'Cargador completo' }, // cabezote + cable
+    ],
+  },
   {
     id: 'audifonos',
     nombre: 'Audífonos',

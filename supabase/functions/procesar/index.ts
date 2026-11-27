@@ -49,7 +49,7 @@ const SUBTIPOS: Record<string, string[]> = {
   forros: ['silicona', 'lujo'],
   vidrios: ['sencillo', 'blindado', 'titanio', 'antiespia', 'curvo', 'camara'],
   cables: [],
-  cargadores: [],
+  cargadores: ['cabezote', 'completo'],
   audifonos: ['cable', 'inalambricos'],
   otros: [],
 };
@@ -93,10 +93,10 @@ CATEGORÍAS (usa exactamente estos ids):
 - forros → subtipo: "silicona" | "lujo" | null. Sinónimos: forro, funda, case, cover, estuche, carcasa; silicona = silicon, silicone, siliconado, soft; lujo = de lujo, lujoso, premium, elegante, cuero.
 - vidrios → subtipo: "sencillo" | "blindado" | "titanio" | "antiespia" | "curvo" | "camara" | null. "camara" = protector de cámara / protector de lente (el que se pone sobre los lentes de la cámara, p. ej. de iPhone); NO es un vidrio de pantalla ni una cámara de repuesto.
 - cables → subtipo: null (pon en "detalle": tipo USB-C / Lightning / Micro USB, marca, largo, carga rápida)
-- cargadores → subtipo: null (detalles en "detalle": vatios, tipo de puerto, marca)
+- cargadores → subtipo: "cabezote" (SOLO el cabezote/cubo/adaptador, sin cable) | "completo" (cargador completo: cabezote + cable; "completo", "con cable", "kit") | null si no se sabe. Detalles en "detalle": vatios, tipo de puerto, marca, carga rápida.
 - audifonos → subtipo: "cable" | "inalambricos" | null (bluetooth, airpods, buds = inalambricos)
 - otros → subtipo: null (mouse, soportes, memorias, parlantes, relojes, etc.)
-Sinónimos: mica/templado/cristal/glass/hidrogel/protector de pantalla o de cámara = vidrio (privacy/privacidad = antiespía; curve = curvo); cubo/cabezote/adaptador = cargador; auriculares/earbuds/buds/manos libres/diadema/cascos/headset = audífonos. Acepta palabras mal escritas o en inglés si es obvio qué son.
+Sinónimos: mica/templado/cristal/glass/hidrogel/protector de pantalla o de cámara = vidrio (privacy/privacidad = antiespía; curve = curvo); cubo/cabezote/adaptador = cargador (subtipo cabezote); auriculares/earbuds/buds/manos libres/diadema/cascos/headset = audífonos. Acepta palabras mal escritas o en inglés si es obvio qué son.
 
 REGLAS:
 1. "No hay / falta / se acabó / se necesita / hay que pedir X" → {"tipo":"agregar", ...}. "modelo" = modelo del celular (ej. "Redmi A7 Pro", "Galaxy A15", "iPhone 13") o nombre del producto si no es para un celular. Si dice "quedan ..." (colores o cantidades que aún hay), ponlo en "quedan" (ej. "azul y negro").

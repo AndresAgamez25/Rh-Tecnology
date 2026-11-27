@@ -43,3 +43,11 @@ test('faltantes: mismo producto aunque cambien mayúsculas, tildes, espacios o g
   assert.notEqual(claveFaltante(a), claveFaltante({ ...a, subtipo: 'titanio' }), 'otro tipo de vidrio es otro producto');
   assert.notEqual(claveFaltante(a), claveFaltante({ ...a, modelo: 'Samsung A25' }));
 });
+
+test('dinero: separador de miles como en Colombia', async () => {
+  const { conPuntos } = await import('../js/dinero.js');
+  assert.equal(conPuntos('900000'), '900.000');
+  assert.equal(conPuntos('1.250.000'), '1.250.000');
+  assert.equal(conPuntos('0045000'), '45.000');
+  assert.equal(conPuntos(''), '');
+});

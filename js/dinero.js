@@ -5,13 +5,13 @@
 // campo.value recibe solo los dígitos ("900000"), así Number(campo.value)
 // sigue funcionando en toda la app sin cambiar nada más.
 // ─────────────────────────────────────────────────────────────
-const VALOR = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value');
 
 const soloDigitos = (v) => String(v ?? '').replace(/\D/g, '').replace(/^0+(?=\d)/, '').slice(0, 12);
 export const conPuntos = (v) => { const d = soloDigitos(v); return d ? Number(d).toLocaleString('es-CO') : ''; };
 
 /** Convierte un <input> en campo de dinero. Devuelve el mismo input. */
 export function hacerDinero(input) {
+  const VALOR = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value');
   input.type = 'text';
   input.inputMode = 'numeric';
   input.autocomplete = 'off';

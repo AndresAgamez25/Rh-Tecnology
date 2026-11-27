@@ -798,7 +798,7 @@ async function instalarApp() {
   }
   await ui.confirmar({
     titulo: 'Instalar en iPhone',
-    mensaje: '1. Abre esta página en Safari.\n2. Toca Compartir (el cuadro con la flecha ↑).\n3. Toca "Agregar a pantalla de inicio" y luego "Agregar".\n\nDespués abre la app desde el icono RH Faltantes e inicia sesión una vez.',
+    mensaje: '1. Abre esta página en Safari.\n2. Toca Compartir (el cuadro con la flecha ↑).\n3. Toca "Agregar a pantalla de inicio" y luego "Agregar".\n\nDespués abre la app desde el icono RH Tecnology e inicia sesión una vez.',
     textoAceptar: 'Entendido',
     peligro: false,
     soloAceptar: true,

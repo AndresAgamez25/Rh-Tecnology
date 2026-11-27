@@ -9,6 +9,7 @@
   /* Colores del logo RH TECNOLOGY: azul rey #1A4FE0 (como el aviso de la tienda),
      azul brillante #1F86FF y celeste #1EB4EA */
   --marca-azul: #1a4fe0;
+  --marca-rey-luminoso: #2f6bff; /* azul rey para texto/logo sobre fondo oscuro */
   --marca-brillante: #1f86ff;
   --marca-celeste: #1eb4ea;
   --degradado: linear-gradient(135deg, #1a4fe0 0%, #1f86ff 55%, #1eb4ea 100%);
@@ -920,9 +921,10 @@ body.grabando #btn-audio { animation: halo 1.2s ease-out infinite; }
   place-content: center;
   justify-items: center;
   gap: 14px;
+  /* Negro, como el ícono y la pantalla de arranque del celular */
   background:
-    radial-gradient(80% 50% at 50% 40%, rgb(31 134 255 / 0.18), transparent 70%),
-    var(--fondo);
+    radial-gradient(70% 45% at 50% 42%, rgb(47 107 255 / 0.16), transparent 70%),
+    #000;
 }
 .bienvenida-marca { position: relative; width: 216px; }
 .bienvenida-logo {
@@ -977,3 +979,8 @@ body.grabando #btn-audio { animation: halo 1.2s ease-out infinite; }
 @keyframes llenar { from { width: 0; } to { width: 100%; } }
 @keyframes bienvenidaSalida { to { opacity: 0; visibility: hidden; } }
 @keyframes bienvenidaZoom { to { transform: scale(1.08); } }
+
+
+/* Nombre en el encabezado con los colores del logo: "RH TEC" azul rey, "NOLOGY" celeste */
+.marca-rey { color: var(--marca-rey-luminoso); }
+.marca-nombre .marca-celeste { background: none; -webkit-background-clip: border-box; background-clip: border-box; color: var(--marca-celeste); }

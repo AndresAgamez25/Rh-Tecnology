@@ -1,4 +1,4 @@
-# RH TECNOLOGY · Faltantes
+# RH Tecnology
 
 App web instalable (PWA) para la tienda **RH TECNOLOGY** de Corozal, Sucre (celulares y accesorios).
 Cualquiera del equipo dice lo que falta **escribiendo, con un audio o con una foto**, y la app lo guarda

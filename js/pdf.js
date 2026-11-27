@@ -9,7 +9,7 @@ import { CATEGORIAS, categoriaPorId, nombreSubtipo } from './categorias.js';
 
 const URL_JSPDF = 'https://cdn.jsdelivr.net/npm/jspdf@4.2.1/+esm';
 
-const AZUL = [26, 79, 224];   // azul rey del aviso de la tienda
+const AZUL = [26, 79, 224];   // azul rey del aviso (sobre papel blanco)
 const CELESTE = [30, 180, 234];
 const VERDE = [16, 140, 96];
 const ROJO = [200, 50, 50];
@@ -161,7 +161,7 @@ export async function descargarFacturaPDF(f) {
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(8);
     doc.setTextColor(...GRIS);
-    doc.text(`RH TECNOLOGY · Faltantes · Página ${i} de ${paginas}`, ancho / 2, alto - 24, { align: 'center' });
+    doc.text(`RH TECNOLOGY · Corozal, Sucre · Página ${i} de ${paginas}`, ancho / 2, alto - 24, { align: 'center' });
   }
 
   doc.save(nombreArchivo(f));

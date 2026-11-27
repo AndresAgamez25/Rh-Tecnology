@@ -13,16 +13,22 @@ function traducirError(error) {
   return 'No se pudo iniciar sesión. Intenta de nuevo.';
 }
 
+/** Inicia sesión y devuelve el usuario. */
 export async function iniciarSesion(email, password) {
-  const { error } = await obtenerCliente().auth.signInWithPassword({
+  const { data, error } = await obtenerCliente().auth.signInWithPassword({
     email: email.trim().toLowerCase(),
     password,
   });
   if (error) throw new Error(traducirError(error));
+  return data.user;
 }
 
+/**
+ * Cierra la sesión EN ESTE CELULAR. scope 'local' borra la sesión
+ * aunque no haya internet (con 'global' podía fallar y dejarla abierta).
+ */
 export async function cerrarSesion() {
-  await obtenerCliente().auth.signOut();
+  await obtenerCliente().auth.signOut({ scope: 'local' });
 }
 
 /**
@@ -36,15 +42,13 @@ export async function obtenerPerfil() {
 }
 
 /**
- * Avisa cada vez que cambia el usuario (entra, sale o se recupera la sesión).
- * Solo llama a fn cuando cambia el usuario, no en cada renovación del token.
+ * Avisa cuando alguien entra, sale o se recupera la sesión al abrir la app.
+ * Las renovaciones del token (cada hora) se ignoran: no cambian al usuario.
+ * La app decide si el aviso es repetido (ver alCambiarUsuario en app.js).
  */
 export function alCambiarUsuario(fn) {
-  let idActual;
-  obtenerCliente().auth.onAuthStateChange((_evento, sesion) => {
-    const id = sesion?.user?.id ?? null;
-    if (id === idActual) return;
-    idActual = id;
+  obtenerCliente().auth.onAuthStateChange((evento, sesion) => {
+    if (!['INITIAL_SESSION', 'SIGNED_IN', 'SIGNED_OUT'].includes(evento)) return;
     // Supabase recomienda no hacer otras llamadas DENTRO de este callback
     // (puede bloquearse); por eso lo pasamos al siguiente ciclo con setTimeout.
     setTimeout(() => fn(sesion?.user ?? null), 0);

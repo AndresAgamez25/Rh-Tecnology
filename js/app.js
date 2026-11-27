@@ -40,6 +40,7 @@ const estado = {
   pestana: leerPestana(),
   enviando: false,
   modo: 'demo',      // 'demo' | 'supabase' (con IA)
+  usuarioId: null,   // usuario con sesión (para ignorar avisos repetidos)
   grabacion: null,   // grabación de audio en curso
   // Modo compras: momento en que empezó la salida (null = no estamos comprando)
   comprasDesde: leerCompras(),
@@ -403,9 +404,10 @@ async function entrar(evento) {
   elementos.btnLogin.disabled = true;
   elementos.btnLogin.textContent = 'Entrando…';
   try {
-    await auth.iniciarSesion(email, password);
+    const usuario = await auth.iniciarSesion(email, password);
     elementos.password.value = '';
-    // El resto lo hace alCambiarUsuario (abajo)
+    // Seguimos de una vez (sin esperar el aviso de Supabase)
+    alCambiarUsuario(usuario);
   } catch (error) {
     elementos.errorLogin.textContent = error.message;
   } finally {
@@ -415,26 +417,36 @@ async function entrar(evento) {
 }
 
 async function salir() {
+  estado.usuarioId = null;
   await datos.detener();
   await auth.cerrarSesion();
+  mostrarVista('login');
 }
 
 /** Se ejecuta cada vez que alguien entra o sale. */
 async function alCambiarUsuario(usuario) {
   if (!usuario) {
+    estado.usuarioId = null;
     await datos.detener();
     estado.items = [];
     mostrarVista('login');
     return;
   }
 
+  // El mismo usuario ya está entrando o adentro: aviso repetido, se ignora
+  const vista = document.body.dataset.vista;
+  if (usuario.id === estado.usuarioId && (vista === 'app' || vista === 'cargando')) return;
+  estado.usuarioId = usuario.id;
+
   mostrarVista('cargando');
   try {
     const nombre = await auth.obtenerPerfil();
     if (!nombre) {
       // Tiene cuenta pero NO está en usuarios_permitidos
+      estado.usuarioId = null;
       await auth.cerrarSesion();
       elementos.errorLogin.textContent = 'Esta cuenta no tiene acceso a la lista.';
+      mostrarVista('login');
       return;
     }
     elementos.usuario.textContent = `Hola, ${nombre}`;
@@ -446,6 +458,7 @@ async function alCambiarUsuario(usuario) {
     mostrarVista('app');
   } catch (error) {
     console.error(error);
+    estado.usuarioId = null;
     elementos.errorLogin.textContent = 'No se pudo cargar la lista. Revisa tu conexión.';
     mostrarVista('login');
   }

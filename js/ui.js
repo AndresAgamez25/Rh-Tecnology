@@ -128,9 +128,14 @@ function etiquetaEstado(item) {
 }
 
 /** Tarjeta de la lista normal, con "✓ Llegó". */
-function tarjetaLista(item, { onLlego }) {
+function tarjetaLista(item, { onLlego, onEditar }) {
   const nodo = el('li', { class: claseTarjeta(item, item.estado === 'comprado' ? 'es-comprado' : ''), 'data-id': item.id },
     infoTarjeta(item),
+    onEditar ? el('button', {
+      type: 'button', class: 'btn-editar',
+      'aria-label': `Corregir ${tituloDe(item)}`, title: 'Corregir',
+      onclick: () => onEditar(item),
+    }, '✏️') : null,
     el('button', {
       type: 'button', class: 'btn-llego',
       'aria-label': `Marcar ${tituloDe(item)} como llegado`,
@@ -208,7 +213,7 @@ function avisoInstalar({ onInstalar, onCerrar }) {
   );
 }
 
-export function dibujarLista(contenedor, items, activa, { onLlego, onCompras, instalar }) {
+export function dibujarLista(contenedor, items, activa, { onLlego, onEditar, onCompras, instalar }) {
   marcarPrimerDibujo(items);
   const visibles = activa === 'todo' ? items : items.filter((it) => it.categoria === activa);
   const aviso = activa === 'todo' && instalar ? avisoInstalar(instalar) : null;
@@ -229,7 +234,7 @@ export function dibujarLista(contenedor, items, activa, { onLlego, onCompras, in
       )
     : null;
 
-  const crear = (it) => tarjetaLista(it, { onLlego });
+  const crear = (it) => tarjetaLista(it, { onLlego, onEditar });
   if (activa !== 'todo') {
     contenedor.replaceChildren(...gruposPorSubtipo(categoriaPorId(activa), visibles, crear));
     return;
@@ -425,7 +430,7 @@ function factura(f, abierta, onPDF, onBorrar) {
 
 const hora = new Intl.DateTimeFormat('es-CO', { hour: 'numeric', minute: '2-digit' });
 const dia = new Intl.DateTimeFormat('es-CO', { weekday: 'long', day: 'numeric', month: 'long' });
-const ICONOS = { agregar: '＋', quitar: '−', vaciar: '⟲', compra: '🛒', borrar_factura: '🗑️', servicio: '🔧' };
+const ICONOS = { agregar: '＋', quitar: '−', vaciar: '⟲', compra: '🛒', borrar_factura: '🗑️', servicio: '🔧', editar: '✏️' };
 
 function nombreDia(fecha) {
   const hoy = new Date();

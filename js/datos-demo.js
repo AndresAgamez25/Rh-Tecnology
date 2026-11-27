@@ -4,6 +4,7 @@
 // cuenta). Se usa cuando no hay config.js o al abrir la app con ?demo.
 // Tiene las mismas funciones que datos-supabase.js.
 // ─────────────────────────────────────────────────────────────
+import { claveFaltante } from './categorias.js';
 
 const CLAVE = 'rh-faltantes-demo';
 const oyentes = new Set();
@@ -72,7 +73,16 @@ export async function listar() {
 
 /** Agrega uno o varios productos. */
 export async function agregar(productos, autor = 'Tú') {
-  const nuevos = productos.map((p) => ({
+  // Igual que el servidor: un producto repetido no se agrega
+  const vistos = new Set(items.map(claveFaltante));
+  const unicos = productos.filter((p) => {
+    const k = claveFaltante({ ...p, subtipo: p.subtipo ?? null });
+    if (vistos.has(k)) return false;
+    vistos.add(k);
+    return true;
+  });
+  if (!unicos.length) return;
+  const nuevos = unicos.map((p) => ({
     id: nuevoId(),
     categoria: p.categoria,
     subtipo: p.subtipo ?? null,
@@ -87,6 +97,17 @@ export async function agregar(productos, autor = 'Tú') {
   }));
   cambiar([...items, ...nuevos]);
   anotar('agregar', `Tú agregaste ${nuevos.map(describir).join(', ')}`);
+}
+
+/** Corrige un producto (nombre, detalle, quedan, categoría). */
+export async function editar(id, { categoria, subtipo, modelo, detalle, quedan }) {
+  const antes = items.find((it) => it.id === id);
+  if (!antes) throw new Error('Ese producto ya no está en la lista');
+  const nuevo = { ...antes, categoria, subtipo: subtipo || null, modelo: modelo.trim(), detalle: detalle.trim(), quedan: quedan.trim() };
+  if (!nuevo.modelo && !nuevo.detalle) throw new Error('Escribe el nombre del producto');
+  if (items.some((it) => it.id !== id && claveFaltante(it) === claveFaltante(nuevo))) throw new Error('Ya hay un producto igual en la lista');
+  cambiar(items.map((it) => (it.id === id ? nuevo : it)));
+  anotar('editar', `Tú corregiste «${describir(antes)}» → «${describir(nuevo)}»`);
 }
 
 /** Quita uno o varios productos por id. */

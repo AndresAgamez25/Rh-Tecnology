@@ -34,6 +34,7 @@ function fuenteActual() {
 export const listar = () => fuenteActual().listar();
 export const agregar = (productos) => fuenteActual().agregar(productos);
 export const quitar = (ids) => fuenteActual().quitar(ids);
+export const editar = (id, cambios) => fuenteActual().editar(id, cambios);
 export const vaciar = () => fuenteActual().vaciar();
 export const actualizarEstado = (ids, estado) => fuenteActual().actualizarEstado(ids, estado);
 export const cerrarCompra = (comprados, noConseguidos) => fuenteActual().cerrarCompra(comprados, noConseguidos);

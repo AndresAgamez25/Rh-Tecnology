@@ -90,6 +90,15 @@ export async function agregar(productos) {
   fusionar(data); // se ve al instante, sin esperar a Realtime
 }
 
+/** Corrige un producto. Lo valida el servidor (editar_faltante): sin repetidos y queda en el historial. */
+export async function editar(id, { categoria, subtipo, modelo, detalle, quedan }) {
+  const { data, error } = await obtenerCliente().rpc('editar_faltante', {
+    p_id: id, p_categoria: categoria, p_subtipo: subtipo ?? '', p_modelo: modelo, p_detalle: detalle, p_quedan: quedan,
+  });
+  if (error) throw new Error(error.message);
+  fusionar(data ?? []);
+}
+
 export async function quitar(ids) {
   const { error } = await obtenerCliente().from(TABLA).delete().in('id', ids);
   if (error) throw error;

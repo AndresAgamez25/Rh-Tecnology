@@ -86,3 +86,15 @@ export function normalizarClasificacion(categoria, subtipo) {
   const sub = cat.subtipos.some((s) => s.id === subtipo) ? subtipo : null;
   return { categoria: cat.id, subtipo: sub };
 }
+
+/**
+ * Clave para saber si dos productos son "el mismo" (igual que en la base de datos):
+ * misma categoría y tipo, y mismo nombre sin importar mayúsculas, tildes,
+ * espacios ni guiones. "Samsung A-15" = "samsung a15".
+ */
+export function claveFaltante({ categoria, subtipo, modelo, detalle }) {
+  const nombre = `${modelo ?? ''} ${detalle ?? ''}`.toLowerCase()
+    .normalize('NFD').replace(/[̀-ͯ]/g, '') // quita tildes (la ñ pasa a n, igual que en la base)
+    .replace(/[^a-z0-9]/g, '');
+  return `${categoria ?? ''}|${subtipo ?? ''}|${nombre}`;
+}

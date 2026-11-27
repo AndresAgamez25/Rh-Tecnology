@@ -3,7 +3,8 @@
 // ─────────────────────────────────────────────────────────────
 import * as datos from './datos.js';
 import { clasificar } from './clasificador.js';
-import { normalizarClasificacion } from './categorias.js';
+import { normalizarClasificacion, claveFaltante, CATEGORIAS, categoriaPorId } from './categorias.js';
+import { abrirHoja } from './servicio/hoja.js';
 import { cargarConfig, crearCliente } from './supabase.js';
 import * as auth from './auth.js';
 import { procesarConIA, configurarIA } from './ia.js';
@@ -138,6 +139,7 @@ function render() {
   ui.actualizarPestanas(elementos.pestanas, estado.items, estado.pestana);
   ui.dibujarLista(elementos.lista, estado.items, estado.pestana, {
     onLlego: marcarLlego,
+    onEditar: editarProducto,
     onCompras: entrarACompras,
     instalar: debeMostrarInstalar() ? { onInstalar: instalarApp, onCerrar: cerrarAvisoInstalar } : null,
   });
@@ -450,6 +452,7 @@ function leerPestana() {
  * Orden: vaciar → quitar → agregar.
  * Devuelve false si el usuario canceló el vaciado.
  */
+/** Devuelve { aplicado, repetidos } (repetidos = nombres que ya estaban en la lista). */
 async function aplicarAcciones(acciones) {
   if (acciones.some((a) => a.tipo === 'vaciar')) {
     const ok = await ui.confirmar({
@@ -457,7 +460,7 @@ async function aplicarAcciones(acciones) {
       mensaje: 'Se borrarán todos los faltantes para todos los usuarios.',
       textoAceptar: 'Sí, vaciar',
     });
-    if (!ok) return false;
+    if (!ok) return { aplicado: false, repetidos: [] };
     await datos.vaciar();
   }
 
@@ -472,8 +475,19 @@ async function aplicarAcciones(acciones) {
       detalle: String(a.detalle ?? '').slice(0, 200),
       quedan: String(a.quedan ?? '').slice(0, 120),
     }));
-  if (nuevos.length) await datos.agregar(nuevos);
-  return true;
+  // Sin repetidos: si ya está en la lista (o viene dos veces), no se agrega otra vez
+  const vaciada = acciones.some((a) => a.tipo === 'vaciar');
+  const quitados = new Set(ids);
+  const vistos = new Set(vaciada ? [] : estado.items.filter((it) => !quitados.has(it.id)).map(claveFaltante));
+  const repetidos = [];
+  const unicos = nuevos.filter((p) => {
+    const k = claveFaltante(p);
+    if (vistos.has(k)) { repetidos.push(p.modelo || p.detalle); return false; }
+    vistos.add(k);
+    return true;
+  });
+  if (unicos.length) await datos.agregar(unicos);
+  return { aplicado: true, repetidos };
 }
 
 /**
@@ -500,10 +514,15 @@ async function interpretar(entrada) {
 /** Procesa texto, audio o foto y aplica las acciones. */
 async function procesarMensaje(entrada) {
   const { acciones, respuesta, transcripcion, conIA } = await interpretar(entrada);
-  const aplicado = await aplicarAcciones(acciones);
+  const { aplicado, repetidos } = await aplicarAcciones(acciones);
   if (!aplicado) return { aplicado, mensaje: 'No se vació la lista.' };
 
   let mensaje = respuesta;
+  if (repetidos.length) {
+    const agregados = acciones.filter((a) => a.tipo === 'agregar').length - repetidos.length;
+    const aviso = `⚠️ Ya estaba en la lista: ${repetidos.join(', ')} (no se repitió)`;
+    mensaje = agregados > 0 || acciones.some((a) => a.tipo !== 'agregar') ? `${mensaje} · ${aviso}` : aviso;
+  }
   if (transcripcion && entrada.audio) mensaje = `🎙️ «${transcripcion}» → ${respuesta}`;
   if (!conIA && estado.modo === 'supabase') {
     mensaje += ` (sin IA${estado.ultimoErrorIA ? ` — ${estado.ultimoErrorIA}` : ''})`;
@@ -545,6 +564,62 @@ async function enviar(evento) {
   await ejecutar({ texto }, { limpiarTexto: true });
 }
 
+/** ✏️ Corregir un producto (por si la voz o la foto no se entendieron bien). */
+async function editarProducto(item) {
+  const cambios = await abrirHoja('✏️ Corregir producto', (cerrar) => {
+    const campo = (etiqueta, valor, props = {}) => {
+      const entrada = ui.el('input', { class: 'st-input', ...props });
+      entrada.value = valor ?? '';
+      return { entrada, nodo: ui.el('label', { class: 'campo' }, ui.el('span', { text: etiqueta }), entrada) };
+    };
+    const modelo = campo('Producto', item.modelo, { placeholder: 'Ej: Samsung A15', autocomplete: 'off' });
+    const detalle = campo('Detalle (opcional)', item.detalle, { placeholder: 'Ej: 128 GB, negro' });
+    const quedan = campo('Quedan (opcional)', item.quedan, { placeholder: 'Ej: 2' });
+    const selCategoria = ui.el('select', { class: 'st-input', 'aria-label': 'Categoría' },
+      ...CATEGORIAS.map((c) => ui.el('option', { value: c.id, text: c.nombre })));
+    selCategoria.value = categoriaPorId(item.categoria).id;
+    const selTipo = ui.el('select', { class: 'st-input', 'aria-label': 'Tipo' });
+    const llenarTipos = (actual) => {
+      const cat = categoriaPorId(selCategoria.value);
+      selTipo.replaceChildren(ui.el('option', { value: '', text: cat.subtipos.length ? 'General' : '—' }),
+        ...cat.subtipos.map((s) => ui.el('option', { value: s.id, text: s.nombre })));
+      selTipo.value = cat.subtipos.some((s) => s.id === actual) ? actual : '';
+      selTipo.disabled = !cat.subtipos.length;
+    };
+    llenarTipos(item.subtipo);
+    selCategoria.addEventListener('change', () => llenarTipos(null));
+    return [
+      modelo.nodo, detalle.nodo,
+      ui.el('div', { class: 'dos' },
+        ui.el('label', { class: 'campo' }, ui.el('span', { text: 'Categoría' }), selCategoria),
+        ui.el('label', { class: 'campo' }, ui.el('span', { text: 'Tipo' }), selTipo)),
+      quedan.nodo,
+      ui.el('div', { class: 'st-botones st-hoja-botones' },
+        ui.el('button', { type: 'button', class: 'btn btn-secundario', onclick: () => cerrar(null) }, 'Cancelar'),
+        ui.el('button', { type: 'button', class: 'btn btn-principal', onclick: () => {
+          const c = {
+            ...normalizarClasificacion(selCategoria.value, selTipo.value || null),
+            modelo: modelo.entrada.value.trim().slice(0, 120),
+            detalle: detalle.entrada.value.trim().slice(0, 200),
+            quedan: quedan.entrada.value.trim().slice(0, 120),
+          };
+          if (!c.modelo && !c.detalle) { ui.toast('Escribe el nombre del producto'); return; }
+          const otro = estado.items.find((it) => it.id !== item.id && claveFaltante(it) === claveFaltante(c));
+          if (otro) { ui.toast(`Ya hay un producto igual en la lista: ${otro.modelo || otro.detalle}`, 4500); return; }
+          cerrar(c);
+        } }, 'Guardar')),
+    ];
+  });
+  if (!cambios) return;
+  try {
+    await datos.editar(item.id, cambios);
+    ui.toast('✏️ Producto corregido');
+  } catch (error) {
+    console.error(error);
+    ui.toast(error.message || 'No se pudo guardar. Revisa tu conexión.', 5000);
+  }
+}
+
 async function marcarLlego(item, nodo) {
   const ok = await ui.confirmar({
     titulo: `¿Llegó ${item.modelo || 'este producto'}?`,
@@ -572,7 +647,7 @@ async function reiniciarLista() {
     return;
   }
   try {
-    const aplicado = await aplicarAcciones([{ tipo: 'vaciar' }]);
+    const { aplicado } = await aplicarAcciones([{ tipo: 'vaciar' }]);
     if (aplicado) ui.toast('Lista reiniciada.');
   } catch (error) {
     console.error(error);

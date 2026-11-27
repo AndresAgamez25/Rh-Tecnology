@@ -34,3 +34,12 @@ test('los mensajes nunca llevan el número de orden y sí el detalle de trabajos
   assert.match(listo, /Por pagar:\* \$150\.000/);
   assert.match(listo, /También:\*\n• Limpieza/);
 });
+
+test('faltantes: mismo producto aunque cambien mayúsculas, tildes, espacios o guiones', async () => {
+  const { claveFaltante } = await import('../js/categorias.js');
+  const a = { categoria: 'vidrios', subtipo: 'blindado', modelo: 'Samsung A15', detalle: '' };
+  assert.equal(claveFaltante(a), claveFaltante({ ...a, modelo: 'samsung  a-15' }));
+  assert.equal(claveFaltante({ ...a, modelo: 'Batería Moto' }), claveFaltante({ ...a, modelo: 'bateria moto' }));
+  assert.notEqual(claveFaltante(a), claveFaltante({ ...a, subtipo: 'titanio' }), 'otro tipo de vidrio es otro producto');
+  assert.notEqual(claveFaltante(a), claveFaltante({ ...a, modelo: 'Samsung A25' }));
+});

@@ -1108,3 +1108,93 @@ begin
       using (bucket_id = 'ordenes' and (select public.es_permitido()))$p$;
   end if;
 end $$;
+
+
+-- ═════════════════════════════════════════════════════════════
+-- 12. FALTANTES: EDITAR Y SIN REPETIDOS
+--    · editar_faltante(): corrige un producto (p. ej. si la voz no se
+--      entendió bien). Solo por esta función, que valida y lo anota.
+--    · Un producto no se puede repetir: misma categoría, tipo y nombre
+--      (sin importar mayúsculas, tildes, espacios ni guiones).
+-- ═════════════════════════════════════════════════════════════
+
+-- "Samsung A-15 " y "samsung a15" son el mismo producto
+create or replace function public.clave_faltante(p_categoria text, p_subtipo text, p_modelo text, p_detalle text)
+returns text language sql immutable set search_path = ''
+as $$
+  select coalesce(p_categoria, '') || '|' || coalesce(p_subtipo, '') || '|'
+    || regexp_replace(translate(lower(coalesce(p_modelo, '') || ' ' || coalesce(p_detalle, '')),
+                                'áàäâéèëêíìïîóòöôúùüûñ', 'aaaaeeeeiiiioooouuuun'), '[^a-z0-9]', '', 'g');
+$$;
+
+-- Al agregar: si ya existe, NO se agrega otra vez (se ignora en silencio;
+-- la app ya avisa "ya estaba en la lista")
+create or replace function public.evitar_faltante_repetido()
+returns trigger language plpgsql security definer set search_path = ''
+as $$
+begin
+  perform pg_advisory_xact_lock(hashtext(public.clave_faltante(new.categoria, new.subtipo, new.modelo, new.detalle)));
+  if exists (select 1 from public.faltantes f
+             where public.clave_faltante(f.categoria, f.subtipo, f.modelo, f.detalle)
+                 = public.clave_faltante(new.categoria, new.subtipo, new.modelo, new.detalle)) then
+    return null;
+  end if;
+  return new;
+end;
+$$;
+drop trigger if exists faltantes_sin_repetidos on public.faltantes;
+create trigger faltantes_sin_repetidos before insert on public.faltantes
+  for each row execute function public.evitar_faltante_repetido();
+
+-- Al editar el producto NO se marca "comprado/no hay" (eso solo al cambiar estado)
+create or replace function public.poner_estado()
+returns trigger
+language plpgsql security definer
+set search_path = ''
+as $$
+begin
+  if (new.categoria, new.subtipo, new.modelo, new.detalle, new.quedan)
+     is distinct from (old.categoria, old.subtipo, old.modelo, old.detalle, old.quedan) then
+    return new; -- es una corrección del producto, no una marca de compras
+  end if;
+  new.estado_por := coalesce(
+    (select nombre from public.usuarios_permitidos where email = lower(auth.jwt() ->> 'email')),
+    'Desconocido'
+  );
+  new.estado_en := now();
+  return new;
+end;
+$$;
+
+create or replace function public.editar_faltante(p_id uuid, p_categoria text, p_subtipo text,
+                                                   p_modelo text, p_detalle text, p_quedan text)
+returns setof public.faltantes language plpgsql security definer set search_path = ''
+as $$
+declare
+  yo text := public.requiere_permiso();
+  a public.faltantes;
+  n public.faltantes;
+  v_modelo text := left(trim(coalesce(p_modelo, '')), 120);
+  v_detalle text := left(trim(coalesce(p_detalle, '')), 200);
+  v_quedan text := left(trim(coalesce(p_quedan, '')), 120);
+  v_sub text := nullif(trim(coalesce(p_subtipo, '')), '');
+begin
+  select * into a from public.faltantes where id = p_id for update;
+  if a.id is null then raise exception 'Ese producto ya no está en la lista' using errcode = 'P0002'; end if;
+  if v_modelo = '' and v_detalle = '' then raise exception 'Escribe el nombre del producto' using errcode = '22023'; end if;
+  if exists (select 1 from public.faltantes f
+             where f.id <> p_id
+               and public.clave_faltante(f.categoria, f.subtipo, f.modelo, f.detalle)
+                 = public.clave_faltante(p_categoria, v_sub, v_modelo, v_detalle)) then
+    raise exception 'Ya hay un producto igual en la lista' using errcode = '23505';
+  end if;
+  update public.faltantes f set categoria = p_categoria, subtipo = v_sub, modelo = v_modelo, detalle = v_detalle, quedan = v_quedan
+  where f.id = p_id returning f.* into n;
+  perform public.anotar('editar', yo || ' corrigió «' || trim(a.modelo || ' ' || a.detalle) || '» → «' || trim(n.modelo || ' ' || n.detalle) || '»'
+    || case when n.quedan <> a.quedan then ' (quedan: ' || coalesce(nullif(n.quedan, ''), '—') || ')' else '' end);
+  return next n;
+end;
+$$;
+revoke all on function public.editar_faltante(uuid, text, text, text, text, text) from public, anon;
+grant execute on function public.editar_faltante(uuid, text, text, text, text, text) to authenticated;
+revoke all on function public.evitar_faltante_repetido() from public, anon, authenticated;

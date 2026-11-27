@@ -1274,3 +1274,16 @@ textarea.st-input { resize: vertical; line-height: 1.4; }
   .st-editor-fila { grid-template-columns: 1fr 100px 40px; }
   .st-editor-descuento { grid-template-columns: 1fr 100px; }
 }
+
+/* Faltantes: botón para corregir un producto */
+.btn-editar {
+  flex: none; width: 34px; height: 34px; padding: 0;
+  border: 1px solid var(--borde); border-radius: 9px;
+  background: var(--superficie-2); font-size: 15px; line-height: 1;
+  opacity: 0.85;
+}
+.btn-editar:active { transform: scale(0.94); }
+.hoja-st .dos { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+select.st-input { appearance: none; -webkit-appearance: none; padding-right: 30px;
+  background: var(--superficie) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%238ea4cc' stroke-width='2' fill='none'/%3E%3C/svg%3E") no-repeat right 12px center; }
+select.st-input:disabled { opacity: 0.5; }

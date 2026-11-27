@@ -404,6 +404,14 @@ elementos.foto.addEventListener('change', async () => {
 
 // ── Vistas y sesión ──────────────────────────────────────────
 
+/** Si un paso tarda demasiado, falla con un mensaje claro (nada de esperas mudas). */
+function conTiempo(promesa, paso, ms = 15_000) {
+  return Promise.race([
+    promesa,
+    new Promise((_, rechazar) => setTimeout(() => rechazar(new Error(`"${paso}" tardó demasiado`)), ms)),
+  ]);
+}
+
 /** Cambia la vista visible: 'cargando' | 'login' | 'app' */
 function mostrarVista(vista) {
   log('vista →', vista);
@@ -462,7 +470,7 @@ async function alCambiarUsuario(usuario, evento = 'directo') {
 
   mostrarVista('cargando');
   try {
-    const nombre = await auth.obtenerPerfil();
+    const nombre = await conTiempo(auth.obtenerPerfil(), 'verificar permiso');
     log('perfil:', nombre);
     if (!nombre) {
       // Tiene cuenta pero NO está en usuarios_permitidos
@@ -474,7 +482,7 @@ async function alCambiarUsuario(usuario, evento = 'directo') {
     }
     elementos.usuario.textContent = `Hola, ${nombre}`;
     elementos.salir.hidden = false;
-    await datos.usar('supabase');
+    await conTiempo(datos.usar('supabase'), 'cargar la lista');
     log('datos listos');
     estado.modo = 'supabase';
     estado.items = await datos.listar();
@@ -484,7 +492,7 @@ async function alCambiarUsuario(usuario, evento = 'directo') {
   } catch (error) {
     console.error('al entrar:', error);
     estado.usuarioId = null;
-    elementos.errorLogin.textContent = 'No se pudo cargar la lista. Revisa tu conexión.';
+    elementos.errorLogin.textContent = `No se pudo entrar (${error.message || 'error'}). Revisa tu conexión e intenta de nuevo.`;
     mostrarVista('login');
   }
 }
@@ -533,6 +541,15 @@ iniciar();
 // ── PWA: registrar el service worker ─────────────────────────
 // Solo funciona en HTTPS (GitHub Pages) o en localhost.
 if ('serviceWorker' in navigator) {
+  // Cuando se publica una versión nueva, el service worker nuevo toma el
+  // control: recargamos UNA vez para usar el código nuevo enseguida.
+  const habiaVersion = Boolean(navigator.serviceWorker.controller);
+  let recargado = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (!habiaVersion || recargado) return;
+    recargado = true;
+    location.reload();
+  });
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('./sw.js').catch((error) => console.warn('Service worker:', error));
   });

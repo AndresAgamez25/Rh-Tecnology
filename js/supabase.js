@@ -25,9 +25,12 @@ export async function cargarConfig() {
 /** Crea el cliente (una sola vez). */
 export async function crearCliente(config) {
   if (cliente) return cliente;
-  const { createClient } = await import(URL_LIBRERIA);
+  const { createClient, processLock } = await import(URL_LIBRERIA);
   cliente = createClient(config.SUPABASE_URL, config.SUPABASE_ANON_KEY, {
     auth: {
+      // Candado solo de esta pestaña: en Android, una pestaña vieja congelada
+      // podía quedarse con el candado compartido y bloquear el login.
+      ...(processLock && { lock: processLock }),
       persistSession: true,      // recuerda la sesión al cerrar la app
       autoRefreshToken: true,    // renueva el token solo
       detectSessionInUrl: false, // no usamos enlaces mágicos

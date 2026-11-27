@@ -5,8 +5,8 @@
 // siempre van por internet.
 //
 // Estrategias:
-//  - Página (index.html): primero internet, si no hay → la guardada.
-//  - CSS/JS/iconos: se muestra la guardada y se actualiza por detrás.
+//  - Archivos de la app (página, CSS, JS, iconos): primero internet;
+//    sin señal → la copia guardada. Así nunca se queda con código viejo.
 //  - Librería de Supabase (CDN, versión fija): la guardada.
 // ⚠️ Al publicar cambios, sube VERSION para limpiar la caché vieja.
 // ─────────────────────────────────────────────────────────────
@@ -51,26 +51,15 @@ self.addEventListener('activate', (e) => {
 async function primeroRed(pedido) {
   const cache = await caches.open(VERSION);
   try {
-    const resp = await fetch(pedido);
+    // no-cache: pregunta al servidor si hay versión nueva (no usa la caché HTTP de 10 min)
+    const resp = await fetch(pedido, { cache: 'no-cache' });
     if (resp.ok) cache.put(pedido, resp.clone());
     return resp;
   } catch {
-    return (await cache.match(pedido)) ?? (await cache.match('./index.html'));
+    const guardada = await cache.match(pedido);
+    if (guardada) return guardada;
+    return pedido.mode === 'navigate' ? (await cache.match('./index.html')) : Response.error();
   }
-}
-
-async function guardadaYActualizar(pedido, evento) {
-  const cache = await caches.open(VERSION);
-  const guardada = await cache.match(pedido);
-  const deRed = fetch(pedido).then((resp) => {
-    if (resp.ok) cache.put(pedido, resp.clone());
-    return resp;
-  }).catch(() => undefined);
-  if (guardada) {
-    evento.waitUntil(deRed);
-    return guardada;
-  }
-  return (await deRed) ?? Response.error();
 }
 
 async function primeroCache(pedido) {
@@ -93,9 +82,5 @@ self.addEventListener('fetch', (e) => {
   }
   if (url.origin !== self.location.origin) return;  // Supabase y demás: sin caché
 
-  if (request.mode === 'navigate') {
-    e.respondWith(primeroRed(request));
-    return;
-  }
-  e.respondWith(guardadaYActualizar(request, e));
+  e.respondWith(primeroRed(request));
 });

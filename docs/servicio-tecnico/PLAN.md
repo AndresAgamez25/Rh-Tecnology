@@ -77,3 +77,24 @@ teléfono del negocio.
 - Fotos en Supabase Storage (reducidas ~200 KB), acceso solo para usuarios permitidos.
 - Entregados: sin permiso de borrar ni editar (triggers/RLS), igual que el historial de actividad.
 - Aviso de datos personales (Ley 1581 de 2012) en el recibo.
+
+
+## Decisiones finales (antes de construir)
+- **Número de orden**: serial automático **interno**. El cliente **nunca** lo ve (ni en WhatsApp, ni en
+  el recibo, ni en la página del cliente). Para el cliente, el enlace usa el código secreto.
+- **Horario** (va en los mensajes y en la página del cliente): lunes a sábado, 8 a. m. a 7 p. m.
+- **Condiciones del taller** (recibo y página del cliente): "Pasados 30 días no se aceptan reclamos ni se
+  responde por el equipo" (texto final por confirmar con el dueño).
+- **Se agregan**:
+  1. **Devolver sin reparar** (no tenía arreglo / no aceptó el precio / se lo lleva así): motivo y lo que
+     se cobra (p. ej. revisión) → en Entregados como "No reparado".
+  2. **WhatsApp al recibir** el equipo (comprobante: equipo, abono, condiciones).
+  3. **Notas en Entregados** (solo agregar; nada se edita ni se borra).
+  4. **Caja del día**: totales por método (efectivo, QR, transferencia).
+  5. **Copia de seguridad**: botón "Descargar copia de todo".
+- **WhatsApp**: el negocio ya está vinculado en el celular de Andrés. El día de la construcción se prueba
+  que abra WhatsApp Business (Android se puede forzar; iPhone se prueba).
+- **Orden de construcción**: 1) BD + inicio · 2) recibir + 3 pestañas · 3) ficha/historial/precio ·
+  4) bloqueo (PIN, patrón, varias claves) · 5) fotos 1 mes + WhatsApp + página del cliente ·
+  6) cobrar/entregar, entregados, caja, copia · 7) recibir por voz y foto (IA).
+- Inicio de construcción: hoy después de las 4 p. m.

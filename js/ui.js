@@ -178,11 +178,26 @@ function marcarPrimerDibujo(items) {
   primerDibujo = false;
 }
 
-export function dibujarLista(contenedor, items, activa, { onLlego, onCompras }) {
+/** Aviso para instalar la app (solo si aún no está instalada). */
+function avisoInstalar({ onInstalar, onCerrar }) {
+  return el('div', { class: 'aviso-instalar' },
+    el('button', { type: 'button', class: 'aviso-instalar-boton', onclick: onInstalar },
+      el('span', { class: 'aviso-instalar-icono', 'aria-hidden': 'true', text: '📲' }),
+      el('span', { class: 'btn-ir-compras-texto' },
+        el('strong', { text: 'Instalar la app' }),
+        el('small', { text: 'Ábrela desde tu pantalla de inicio, sin buscar la página' }),
+      ),
+    ),
+    el('button', { type: 'button', class: 'aviso-instalar-cerrar', 'aria-label': 'No mostrar más', onclick: onCerrar }, '✕'),
+  );
+}
+
+export function dibujarLista(contenedor, items, activa, { onLlego, onCompras, instalar }) {
   marcarPrimerDibujo(items);
   const visibles = activa === 'todo' ? items : items.filter((it) => it.categoria === activa);
+  const aviso = activa === 'todo' && instalar ? avisoInstalar(instalar) : null;
   if (!visibles.length) {
-    contenedor.replaceChildren(estadoVacio(activa));
+    contenedor.replaceChildren(...[aviso, estadoVacio(activa)].filter(Boolean));
     return;
   }
 
@@ -203,7 +218,7 @@ export function dibujarLista(contenedor, items, activa, { onLlego, onCompras }) 
     contenedor.replaceChildren(...gruposPorSubtipo(categoriaPorId(activa), visibles, crear));
     return;
   }
-  contenedor.replaceChildren(...[botonCompras, ...seccionesPorCategoria(visibles, crear)].filter(Boolean));
+  contenedor.replaceChildren(...[aviso, botonCompras, ...seccionesPorCategoria(visibles, crear)].filter(Boolean));
 }
 
 // ── Modo compras ─────────────────────────────────────────────
@@ -282,8 +297,9 @@ export function dibujarCompras(contenedor, items, inicio, acciones) {
  * Muestra el modal propio y devuelve una Promesa con true/false.
  * Usa <dialog>: el navegador se encarga del foco y de cerrar con Escape.
  */
-export function confirmar({ titulo, mensaje, textoAceptar = 'Aceptar', peligro = true }) {
+export function confirmar({ titulo, mensaje, textoAceptar = 'Aceptar', peligro = true, soloAceptar = false }) {
   const modal = document.getElementById('modal');
+  modal.querySelector('button[value="cancelar"]').hidden = soloAceptar;
   modal.querySelector('#modal-titulo').textContent = titulo;
   modal.querySelector('#modal-mensaje').textContent = mensaje;
   const aceptar = modal.querySelector('#modal-aceptar');

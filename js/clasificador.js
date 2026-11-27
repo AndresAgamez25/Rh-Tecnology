@@ -18,6 +18,7 @@ export function normalizar(texto) {
 // ── Diccionarios de palabras clave ───────────────────────────
 
 const PALABRAS_CATEGORIA = {
+  celulares: /\b(celular(es)?|telefonos?|smartphones?|equipos?)\b/,
   forros: /\b(forros?|fundas?|cases?|estuches?|carcasas?)\b/,
   vidrios: /\b(vidrios?|micas?|templados?|cristal(es)?|protector(es)?\s+de\s+pantalla)\b/,
   cables: /\b(cables?|usb|lightning|tipo\s*-?\s*c|micro\s*-?\s*usb|v8)\b/,
@@ -27,7 +28,23 @@ const PALABRAS_CATEGORIA = {
   otros: /\b(memorias?|micro\s*sd|mouse|ratones?|soportes?|parlantes?|bafles?|teclados?|popsockets?|tripodes?|aros?\s+de\s+luz|relojes?|smartwatch\w*|pendrives?|lapiz|stylus|baterias?|power\s*banks?)\b/,
 };
 
+// Marcas de celulares (también sirven para reconocer un celular sin la palabra "celular")
+const MARCAS_CELULAR = {
+  samsung: /\b(samsung|galaxy)\b/,
+  xiaomi: /\b(xiaomi|redmi|poco)\b/,
+  motorola: /\b(motorola|moto)\b/,
+  apple: /\b(iphone|apple)\b/,
+  tecno: /\b(tecno|spark|camon|pova)\b/,
+  infinix: /\b(infinix)\b/,
+  honor: /\b(honor)\b/,
+  otras: /\b(oppo|realme|vivo|huawei|zte|nokia|alcatel|blu)\b/,
+};
+// Para ADIVINAR que es un celular solo usamos marcas que no son palabras
+// comunes del español (no "poco", "vivo", "honor", "moto"...)
+const RE_MARCA = /\b(samsung|galaxy|xiaomi|redmi|motorola|iphone|tecno|infinix|oppo|realme|huawei)\b/;
+
 const PALABRAS_SUBTIPO = {
+  celulares: MARCAS_CELULAR,
   forros: {
     silicona: /\bsilicon[ae]?s?\b/,
     lujo: /\b(lujo|lujos[oa]s?|premium|elegantes?)\b/,
@@ -110,17 +127,32 @@ function formatearPalabra(p) {
   return p.charAt(0).toUpperCase() + p.slice(1);
 }
 
+// Celulares: "6+128", "4 de ram", "128 gigas", "1 tb"
+const DETALLES_CELULAR = [
+  [/\b(\d{1,2})\s*\+\s*(\d{2,4})\b/g, (m) => [`${m[2]} GB`, `${m[1]} GB RAM`]],
+  [/\b(\d{1,2})\s*(?:gb|gigas?)?\s*(?:de\s+)?ram\b/g, (m) => `${m[1]} GB RAM`],
+  [/\b(\d{2,4})\s*(?:gb|gigas?)\b(?:\s+de\s+(?:almacenamiento|memoria(?:\s+interna)?))?/g, (m) => `${m[1]} GB`],
+  [/\b(\d{2,4})\s+de\s+(?:almacenamiento|memoria(?:\s+interna)?)\b/g, (m) => `${m[1]} GB`],
+  [/\b(\d)\s*(?:tb|teras?)\b/g, (m) => `${m[1]} TB`],
+  // "iPhone 13 de 128": número típico de almacenamiento después de "de"
+  [/\bde\s+(32|64|128|256|512)\b/g, (m) => `${m[1]} GB`],
+];
+
 /** Saca los detalles técnicos y devuelve {resto, detalles[]} */
-function extraerDetalles(texto) {
+function extraerDetalles(texto, categoria = null) {
   const encontrados = [];
   let resto = texto;
-  for (const [re, formato] of DETALLES) {
+  const lista = categoria === 'celulares' ? DETALLES_CELULAR : DETALLES;
+  for (const [re, formato] of lista) {
     resto = resto.replace(re, (...args) => {
-      const valor = formato(args);
-      if (!encontrados.includes(valor)) encontrados.push(valor);
+      for (const valor of [formato(args)].flat()) {
+        if (!encontrados.includes(valor)) encontrados.push(valor);
+      }
       return ' ';
     });
   }
+  // Celulares: primero el almacenamiento y luego la RAM ("128 GB · 6 GB RAM")
+  if (categoria === 'celulares') encontrados.sort((a, b) => a.includes('RAM') - b.includes('RAM'));
   return { resto, detalles: encontrados };
 }
 
@@ -132,15 +164,18 @@ function palabrasModelo(texto, categoria) {
   for (const [cat, re] of Object.entries(PALABRAS_CATEGORIA)) {
     if (cat !== 'otros') t = t.replace(new RegExp(re.source, 'g'), ' ');
   }
-  for (const sub of Object.values(PALABRAS_SUBTIPO[categoria] ?? {})) {
-    t = t.replace(new RegExp(sub.source, 'g'), ' ');
+  // En celulares la marca ES parte del modelo ("Redmi 13C"), no se quita
+  if (categoria !== 'celulares') {
+    for (const sub of Object.values(PALABRAS_SUBTIPO[categoria] ?? {})) {
+      t = t.replace(new RegExp(sub.source, 'g'), ' ');
+    }
   }
   return t.split(/\s+/).map((p) => p.replace(/^[.+-]+|[.+-]+$/g, '')).filter((p) => p && !RELLENO.has(p));
 }
 
 /** Divide un mensaje en frases, una por producto. */
 export function segmentar(texto) {
-  const productos = Object.values(PALABRAS_CATEGORIA).map((re) => re.source).join('|');
+  const productos = [...Object.values(PALABRAS_CATEGORIA), RE_MARCA].map((re) => re.source).join('|');
   return texto
     // separadores de oración
     .replace(/[.;!?\n]+/g, '|')
@@ -160,8 +195,8 @@ export function segmentar(texto) {
 /** Busca en la lista los ítems a los que se refiere una frase de "llegó". */
 function buscarCoincidencias(frase, lista) {
   const categoria = detectarCategoria(frase);
-  const subtipo = categoria ? detectarSubtipo(categoria, frase) : null;
-  const { resto } = extraerDetalles(frase);
+  const subtipo = categoria && categoria !== 'celulares' ? detectarSubtipo(categoria, frase) : null;
+  const { resto } = extraerDetalles(frase, categoria);
   const palabras = palabrasModelo(resto, categoria);
   if (!palabras.length && !categoria) return [];
 
@@ -184,9 +219,12 @@ function construirItem(frase, quedan, anterior) {
   let subtipo = categoria ? detectarSubtipo(categoria, frase) : null;
   // "No hay forro A15 ni A25" → la segunda frase hereda "forros"
   if (!categoria && anterior) { categoria = anterior.categoria; subtipo = anterior.subtipo; }
+  // "No hay Redmi 13C de 128" → sin accesorio pero con marca = celular
+  if (!categoria && RE_MARCA.test(frase)) categoria = 'celulares';
   categoria ??= 'otros';
+  if (categoria === 'celulares') subtipo = detectarSubtipo('celulares', frase) ?? 'otras';
 
-  const { resto, detalles } = extraerDetalles(frase);
+  const { resto, detalles } = extraerDetalles(frase, categoria);
   const modelo = palabrasModelo(resto, categoria).map(formatearPalabra).join(' ');
   return {
     tipo: 'agregar',
@@ -246,7 +284,7 @@ export function clasificar(texto, lista = []) {
     }
 
     // Evitamos basura: debe tener un marcador, una categoría o venir de una frase anterior
-    if (!RE_AGREGAR.test(producto) && !detectarCategoria(producto) && !anterior) continue;
+    if (!RE_AGREGAR.test(producto) && !detectarCategoria(producto) && !RE_MARCA.test(producto) && !anterior) continue;
 
     const item = construirItem(producto, quedan, anterior);
 

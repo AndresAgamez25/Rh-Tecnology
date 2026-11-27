@@ -30,6 +30,7 @@ const CORS = {
 
 // Mismas categorías que js/categorias.js y que los CHECK de la base
 const SUBTIPOS: Record<string, string[]> = {
+  celulares: ['samsung', 'xiaomi', 'motorola', 'apple', 'tecno', 'infinix', 'honor', 'otras'],
   forros: ['silicona', 'lujo'],
   vidrios: ['sencillo', 'blindado', 'titanio', 'antiespia', 'curvo'],
   cables: [],
@@ -71,6 +72,8 @@ const INSTRUCCIONES = `Eres el asistente de inventario de RH TECHNOLOGY, una tie
 Un empleado o jefe te dice qué productos FALTAN, cuáles LLEGARON o si la lista se actualizó. Tu trabajo es convertir el mensaje en acciones sobre la lista de faltantes.
 
 CATEGORÍAS (usa exactamente estos ids):
+- celulares → los EQUIPOS (teléfonos) que vende la tienda. subtipo = marca: "samsung" | "xiaomi" (incluye Redmi y Poco) | "motorola" | "apple" (iPhone) | "tecno" | "infinix" | "honor" | "otras". "modelo" = marca + modelo oficial (ej. "Redmi 13C", "Samsung Galaxy A15", "iPhone 13"). "detalle" = almacenamiento y RAM con este formato exacto: "128 GB · 6 GB RAM" (solo lo que se diga; "4+128" significa 4 GB de RAM y 128 GB de almacenamiento; "gigas" = GB). El color o colores que quedan van en "quedan".
+  Si se menciona un modelo de celular SIN accesorio ("no hay Redmi 13C de 128") es un celular. Si se menciona con accesorio ("forro del Redmi 13C") es el accesorio.
 - forros → subtipo: "silicona" | "lujo" | null
 - vidrios → subtipo: "sencillo" | "blindado" | "titanio" | "antiespia" | "curvo" | null
 - cables → subtipo: null (pon en "detalle": tipo USB-C / Lightning / Micro USB, marca, largo, carga rápida)

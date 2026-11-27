@@ -70,10 +70,11 @@ grant execute on function public.mi_perfil()    to authenticated;
 create table if not exists public.faltantes (
   id          uuid primary key default gen_random_uuid(),
   categoria   text not null
-              check (categoria in ('forros','vidrios','cables','cargadores','audifonos','otros')),
+              check (categoria in ('celulares','forros','vidrios','cables','cargadores','audifonos','otros')),
   subtipo     text
               check (
                 subtipo is null
+                or (categoria = 'celulares' and subtipo in ('samsung','xiaomi','motorola','apple','tecno','infinix','honor','otras'))
                 or (categoria = 'forros'    and subtipo in ('silicona','lujo'))
                 or (categoria = 'vidrios'   and subtipo in ('sencillo','blindado','titanio','antiespia','curvo'))
                 or (categoria = 'audifonos' and subtipo in ('cable','inalambricos'))
@@ -227,3 +228,23 @@ create policy "marcar estado" on public.faltantes
   for update to authenticated
   using ( (select public.es_permitido()) )
   with check ( (select public.es_permitido()) );
+
+
+-- ─────────────────────────────────────────────────────────────
+-- 8. CATEGORÍA CELULARES (agrupada por marca)
+--    Para bases creadas antes de existir esta categoría: se
+--    reemplazan las reglas CHECK de categoría y subtipo.
+-- ─────────────────────────────────────────────────────────────
+alter table public.faltantes drop constraint if exists faltantes_categoria_check;
+alter table public.faltantes add constraint faltantes_categoria_check
+  check (categoria in ('celulares','forros','vidrios','cables','cargadores','audifonos','otros'));
+
+alter table public.faltantes drop constraint if exists faltantes_check;
+alter table public.faltantes drop constraint if exists faltantes_subtipo_check;
+alter table public.faltantes add constraint faltantes_subtipo_check check (
+    subtipo is null
+    or (categoria = 'celulares' and subtipo in ('samsung','xiaomi','motorola','apple','tecno','infinix','honor','otras'))
+    or (categoria = 'forros'    and subtipo in ('silicona','lujo'))
+    or (categoria = 'vidrios'   and subtipo in ('sencillo','blindado','titanio','antiespia','curvo'))
+    or (categoria = 'audifonos' and subtipo in ('cable','inalambricos'))
+);

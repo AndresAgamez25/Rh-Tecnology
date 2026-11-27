@@ -3,6 +3,21 @@
 
 export const CATEGORIAS = [
   {
+    id: 'celulares',
+    nombre: 'Celulares',
+    // Agrupados por marca; detalle = almacenamiento y RAM
+    subtipos: [
+      { id: 'samsung', nombre: 'Samsung' },
+      { id: 'xiaomi', nombre: 'Xiaomi · Redmi · Poco' },
+      { id: 'motorola', nombre: 'Motorola' },
+      { id: 'apple', nombre: 'Apple' },
+      { id: 'tecno', nombre: 'Tecno' },
+      { id: 'infinix', nombre: 'Infinix' },
+      { id: 'honor', nombre: 'Honor' },
+      { id: 'otras', nombre: 'Otras marcas' },
+    ],
+  },
+  {
     id: 'forros',
     nombre: 'Forros',
     subtipos: [

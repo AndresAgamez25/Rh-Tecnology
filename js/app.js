@@ -76,6 +76,7 @@ function render() {
   ui.dibujarLista(elementos.lista, estado.items, estado.pestana, {
     onLlego: marcarLlego,
     onCompras: entrarACompras,
+    instalar: debeMostrarInstalar() ? { onInstalar: instalarApp, onCerrar: cerrarAvisoInstalar } : null,
   });
 }
 
@@ -542,6 +543,55 @@ async function iniciar() {
 }
 
 iniciar();
+
+// ── PWA: botón "Instalar app" ────────────────────────────────
+// Android/Chrome avisa con "beforeinstallprompt" que se puede instalar;
+// lo guardamos para abrir el instalador cuando toquen el botón.
+// iPhone no tiene ese evento: mostramos los pasos de Safari.
+let eventoInstalar = null;
+const esIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
+const yaInstalada = () => window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+
+function leerAvisoCerrado() {
+  try { return localStorage.getItem('rh-aviso-instalar') === 'cerrado'; } catch { return false; }
+}
+
+function debeMostrarInstalar() {
+  return !yaInstalada() && !leerAvisoCerrado() && (Boolean(eventoInstalar) || esIOS);
+}
+
+window.addEventListener('beforeinstallprompt', (e) => {
+  e.preventDefault();
+  eventoInstalar = e;
+  render();
+});
+window.addEventListener('appinstalled', () => {
+  eventoInstalar = null;
+  render();
+  ui.toast('✅ App instalada. Ábrela desde tu pantalla de inicio.', 4500);
+});
+
+async function instalarApp() {
+  if (eventoInstalar) {
+    eventoInstalar.prompt();
+    await eventoInstalar.userChoice;
+    eventoInstalar = null;
+    render();
+    return;
+  }
+  await ui.confirmar({
+    titulo: 'Instalar en iPhone',
+    mensaje: '1. Abre esta página en Safari.\n2. Toca Compartir (el cuadro con la flecha ↑).\n3. Toca "Agregar a pantalla de inicio" y luego "Agregar".\n\nDespués abre la app desde el icono RH Faltantes e inicia sesión una vez.',
+    textoAceptar: 'Entendido',
+    peligro: false,
+    soloAceptar: true,
+  });
+}
+
+function cerrarAvisoInstalar() {
+  try { localStorage.setItem('rh-aviso-instalar', 'cerrado'); } catch { /* sin almacenamiento */ }
+  render();
+}
 
 // ── PWA: registrar el service worker ─────────────────────────
 // Solo funciona en HTTPS (GitHub Pages) o en localhost.

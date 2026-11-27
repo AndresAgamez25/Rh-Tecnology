@@ -89,3 +89,50 @@ test('texto sin sentido no agrega basura', () => {
   assert.equal(r.acciones.length, 0);
   assert.match(r.respuesta, /No entendí/);
 });
+
+// ── Celulares ────────────────────────────────────────────────
+
+test('celular con almacenamiento y RAM', () => {
+  const [c] = agregados(clasificar('Falta el celular Redmi 13C de 128 gigas y 6 de RAM, quedan negro'));
+  assert.deepEqual([c.categoria, c.subtipo, c.modelo, c.detalle, c.quedan],
+    ['celulares', 'xiaomi', 'Redmi 13C', '128 GB · 6 GB RAM', 'negro']);
+});
+
+test('celular sin decir "celular" y formato 4+128', () => {
+  const [c] = agregados(clasificar('no hay Samsung Galaxy A15 4+128'));
+  assert.deepEqual([c.categoria, c.subtipo, c.modelo, c.detalle],
+    ['celulares', 'samsung', 'Samsung Galaxy A15', '128 GB · 4 GB RAM']);
+});
+
+test('dos celulares en una frase', () => {
+  const a = agregados(clasificar('no hay Redmi 13C y Samsung A15 de 256gb'));
+  assert.deepEqual(a.map((x) => [x.categoria, x.subtipo, x.modelo, x.detalle]),
+    [['celulares', 'xiaomi', 'Redmi 13C', ''], ['celulares', 'samsung', 'Samsung A15', '256 GB']]);
+});
+
+test('el forro de un celular sigue siendo forro', () => {
+  const [f] = agregados(clasificar('no hay forro del Redmi 13C'));
+  assert.equal(f.categoria, 'forros');
+  assert.equal(f.modelo, 'Redmi 13C');
+});
+
+test('celular sin marca conocida va a "otras"', () => {
+  const [c] = agregados(clasificar('falta celular Nubia Neo 2 de 256 gb'));
+  assert.deepEqual([c.categoria, c.subtipo, c.modelo, c.detalle], ['celulares', 'otras', 'Nubia Neo 2', '256 GB']);
+});
+
+test('memoria de 64gb sigue en Otros (no es celular)', () => {
+  const [o] = agregados(clasificar('No hay memoria de 64gb'));
+  assert.equal(o.categoria, 'otros');
+});
+
+test('llegó un celular lo quita', () => {
+  const lista = [{ id: 'c1', categoria: 'celulares', subtipo: 'xiaomi', modelo: 'Redmi 13C', detalle: '128 GB · 6 GB RAM' }];
+  const r = clasificar('ya llegó el Redmi 13C', lista);
+  assert.deepEqual(r.acciones, [{ tipo: 'quitar', id: 'c1' }]);
+});
+
+test('"de 128" sin decir gigas = 128 GB', () => {
+  const [c] = agregados(clasificar('no hay iPhone 13 de 128'));
+  assert.deepEqual([c.categoria, c.subtipo, c.modelo, c.detalle], ['celulares', 'apple', 'iPhone 13', '128 GB']);
+});

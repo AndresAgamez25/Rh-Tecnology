@@ -20,6 +20,8 @@ function haceMinutos(min) {
 
 function semilla() {
   return [
+    { categoria: 'celulares', subtipo: 'xiaomi', modelo: 'Redmi 13C', detalle: '128 GB · 6 GB RAM', quedan: 'solo negro', creado_por: 'Patricia', creado_en: haceMinutos(20) },
+    { categoria: 'celulares', subtipo: 'samsung', modelo: 'Samsung Galaxy A15', detalle: '128 GB · 4 GB RAM', quedan: '', creado_por: 'Osman', creado_en: haceMinutos(140) },
     { categoria: 'forros', subtipo: 'silicona', modelo: 'Redmi A7 Pro', detalle: '', quedan: 'azul y negro', creado_por: 'Jefe 1', creado_en: haceMinutos(12) },
     { categoria: 'forros', subtipo: 'lujo', modelo: 'iPhone 15 Pro Max', detalle: 'con MagSafe', quedan: '', creado_por: 'Tú', creado_en: haceMinutos(95) },
     { categoria: 'vidrios', subtipo: 'blindado', modelo: 'Galaxy A15', detalle: '', quedan: '', creado_por: 'Tú', creado_en: haceMinutos(30) },

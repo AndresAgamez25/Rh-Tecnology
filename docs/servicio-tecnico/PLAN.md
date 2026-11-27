@@ -23,6 +23,11 @@ Búsqueda por nombre, teléfono, IMEI o número de orden.
   cuadrícula de 9 puntos (se guarda como la secuencia, p. ej. 1-2-3-5-7-8-9) y se muestra dibujado,
   con el inicio en verde, flechas y el orden numerado (en la ficha, en Entregados y en el recibo).
   También se puede dictar ("patrón en Z empezando arriba a la izquierda").
+- **Varias claves** si el cliente no está seguro: se guardan todas las opciones (patrones y/o PIN, con
+  una descripción, p. ej. "su año de nacimiento"). El técnico marca cada una como **"✓ Funcionó"** o
+  **"✗ No sirvió"**; la que funcionó queda en verde y se muestra primero (también en Entregados).
+- **Si ninguna sirve**: "El cliente no recuerda la clave". Si hay que formatear (se borran los datos),
+  se pide y se anota la **autorización del cliente** en el historial (fecha y quién la recibió).
 - Lo que dice el cliente que tiene.
 - Precio cotizado, abono y cómo pagó el abono.
 - **Llegó con**: SIM, memoria, forro, cargador, caja, **＋ Otro (texto libre)**.

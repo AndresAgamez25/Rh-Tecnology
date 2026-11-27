@@ -56,6 +56,24 @@ const elementos = {
   barraProgreso: $('compras-barra'),
 };
 
+// ── Bienvenida ───────────────────────────────────────────────
+// El logo se ve 2 segundos cada vez que se abre la app (contados desde que
+// empezó a cargar la página). Mientras tanto la sesión y la lista cargan
+// por debajo, así que la espera no se suma.
+const DURACION_BIENVENIDA = 2000;
+const bienvenida = document.getElementById('bienvenida');
+let bienvenidaActiva = Boolean(bienvenida);
+if (bienvenida) {
+  setTimeout(() => {
+    bienvenida.classList.add('saliendo');
+    setTimeout(() => {
+      bienvenida.remove();
+      bienvenidaActiva = false;
+      if (document.body.dataset.vista === 'app') animarEntrada();
+    }, 450);
+  }, Math.max(0, DURACION_BIENVENIDA - performance.now()));
+}
+
 // Estado de la app: una sola fuente de verdad
 const estado = {
   items: [],
@@ -619,8 +637,9 @@ function conTiempo(promesa, paso, ms = 15_000) {
 function mostrarVista(vista) {
   log('vista →', vista);
   document.body.dataset.vista = vista;
-  if (vista === 'app') animarEntrada();
-  if (vista === 'login') elementos.email.focus();
+  if (vista === 'app' && !bienvenidaActiva) animarEntrada();
+  // Sin abrir el teclado mientras se ve el logo de bienvenida
+  if (vista === 'login' && !bienvenidaActiva) elementos.email.focus();
 }
 
 async function entrar(evento) {

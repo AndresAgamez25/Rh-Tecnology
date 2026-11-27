@@ -84,24 +84,49 @@ export function formatearFecha(iso) {
 const yaMostradas = new Set();
 let primerDibujo = true;
 
-function tarjeta(item, onLlego) {
-  const categoria = categoriaPorId(item.categoria);
-  const titulo = item.modelo || item.detalle || categoria.nombre;
-  const detalle = item.modelo ? item.detalle : '';
-  const meta = [formatearFecha(item.creado_en), item.creado_por].filter(Boolean).join(' · ');
-
+/** ¿La tarjeta es nueva? (para animar solo las que acaban de llegar) */
+function claseTarjeta(item, extra = '') {
   const esNueva = !primerDibujo && !yaMostradas.has(item.id);
   yaMostradas.add(item.id);
-  const nodo = el('li', { class: esNueva ? 'tarjeta nueva' : 'tarjeta', 'data-id': item.id },
-    el('div', { class: 'tarjeta-info' },
-      el('h4', { class: 'tarjeta-modelo', text: titulo }),
-      detalle ? el('p', { class: 'tarjeta-detalle', text: detalle }) : null,
-      item.quedan ? el('span', { class: 'etiqueta-quedan', text: `Quedan: ${item.quedan}` }) : null,
-      meta ? el('p', { class: 'tarjeta-meta', text: meta }) : null,
-    ),
+  return ['tarjeta', esNueva && 'nueva', extra].filter(Boolean).join(' ');
+}
+
+function tituloDe(item) {
+  return item.modelo || item.detalle || categoriaPorId(item.categoria).nombre;
+}
+
+/** Parte de la tarjeta con modelo, detalle, "Quedan" y estado. */
+function infoTarjeta(item, { mostrarEstado = true } = {}) {
+  const detalle = item.modelo ? item.detalle : '';
+  const meta = [formatearFecha(item.creado_en), item.creado_por].filter(Boolean).join(' · ');
+  return el('div', { class: 'tarjeta-info' },
+    el('h4', { class: 'tarjeta-modelo', text: tituloDe(item) }),
+    detalle ? el('p', { class: 'tarjeta-detalle', text: detalle }) : null,
+    item.quedan ? el('span', { class: 'etiqueta etiqueta-quedan', text: `Quedan: ${item.quedan}` }) : null,
+    mostrarEstado ? etiquetaEstado(item) : null,
+    meta ? el('p', { class: 'tarjeta-meta', text: meta }) : null,
+  );
+}
+
+/** Etiqueta "🛒 Comprado por…" o "No se consiguió…" */
+function etiquetaEstado(item) {
+  const quien = [item.estado_por, item.estado_en && formatearFecha(item.estado_en)].filter(Boolean).join(' · ');
+  if (item.estado === 'comprado') {
+    return el('span', { class: 'etiqueta etiqueta-comprado', text: `🛒 Comprado${quien ? ` · ${quien}` : ''}` });
+  }
+  if (item.estado === 'no_conseguido') {
+    return el('span', { class: 'etiqueta etiqueta-no-hay', text: `✗ No se consiguió${quien ? ` · ${quien}` : ''}` });
+  }
+  return null;
+}
+
+/** Tarjeta de la lista normal, con "✓ Llegó". */
+function tarjetaLista(item, { onLlego }) {
+  const nodo = el('li', { class: claseTarjeta(item, item.estado === 'comprado' ? 'es-comprado' : ''), 'data-id': item.id },
+    infoTarjeta(item),
     el('button', {
       type: 'button', class: 'btn-llego',
-      'aria-label': `Marcar ${titulo} como llegado`,
+      'aria-label': `Marcar ${tituloDe(item)} como llegado`,
       onclick: () => onLlego(item, nodo),
     }, '✓ Llegó'),
   );
@@ -109,7 +134,7 @@ function tarjeta(item, onLlego) {
 }
 
 /** Agrupa los ítems de una categoría por subtipo, en el orden definido. */
-function gruposPorSubtipo(categoria, items, onLlego) {
+function gruposPorSubtipo(categoria, items, crearTarjeta) {
   const orden = [...categoria.subtipos.map((s) => s.id), null];
   const nodos = [];
   for (const sub of orden) {
@@ -122,9 +147,20 @@ function gruposPorSubtipo(categoria, items, onLlego) {
     if (categoria.subtipos.length) {
       nodos.push(el('h3', { class: 'grupo-titulo', text: nombreSubtipo(categoria.id, sub) ?? 'General' }));
     }
-    nodos.push(el('ul', { class: 'tarjetas' }, ...delGrupo.map((it) => tarjeta(it, onLlego))));
+    nodos.push(el('ul', { class: 'tarjetas' }, ...delGrupo.map(crearTarjeta)));
   }
   return nodos;
+}
+
+/** Una sección por categoría (vista "Todo" y Modo compras). */
+function seccionesPorCategoria(items, crearTarjeta, nivel = 'h2') {
+  return CATEGORIAS
+    .map((cat) => ({ cat, delCat: items.filter((it) => categoriaPorId(it.categoria).id === cat.id) }))
+    .filter(({ delCat }) => delCat.length)
+    .map(({ cat, delCat }) => el('section', { class: 'seccion' },
+      el(nivel, { class: 'seccion-titulo' }, cat.nombre, el('span', { class: 'contador', text: String(delCat.length) })),
+      ...gruposPorSubtipo(cat, delCat, crearTarjeta),
+    ));
 }
 
 function estadoVacio(activa) {
@@ -136,30 +172,108 @@ function estadoVacio(activa) {
   );
 }
 
-export function dibujarLista(contenedor, items, activa, { onLlego }) {
-  const visibles = activa === 'todo' ? items : items.filter((it) => it.categoria === activa);
-  // Las de otras pestañas también cuentan como "ya vistas"
+function marcarPrimerDibujo(items) {
+  // En el primer dibujo nada se anima (todas cuentan como "ya vistas")
   if (primerDibujo) items.forEach((it) => yaMostradas.add(it.id));
   primerDibujo = false;
+}
+
+export function dibujarLista(contenedor, items, activa, { onLlego, onCompras }) {
+  marcarPrimerDibujo(items);
+  const visibles = activa === 'todo' ? items : items.filter((it) => it.categoria === activa);
   if (!visibles.length) {
     contenedor.replaceChildren(estadoVacio(activa));
     return;
   }
 
+  const porComprar = items.filter((it) => it.estado !== 'comprado').length;
+  const botonCompras = activa === 'todo' && porComprar
+    ? el('button', { type: 'button', class: 'btn-ir-compras', onclick: onCompras },
+        el('span', { class: 'btn-ir-compras-icono', 'aria-hidden': 'true', text: '🛒' }),
+        el('span', { class: 'btn-ir-compras-texto' },
+          el('strong', { text: 'Modo compras' }),
+          el('small', { text: `${porComprar} ${porComprar === 1 ? 'producto' : 'productos'} por comprar` }),
+        ),
+        el('span', { 'aria-hidden': 'true', text: '›' }),
+      )
+    : null;
+
+  const crear = (it) => tarjetaLista(it, { onLlego });
   if (activa !== 'todo') {
-    contenedor.replaceChildren(...gruposPorSubtipo(categoriaPorId(activa), visibles, onLlego));
+    contenedor.replaceChildren(...gruposPorSubtipo(categoriaPorId(activa), visibles, crear));
     return;
   }
+  contenedor.replaceChildren(...[botonCompras, ...seccionesPorCategoria(visibles, crear)].filter(Boolean));
+}
 
-  // Vista "Todo": una sección por categoría
-  const secciones = CATEGORIAS
-    .map((cat) => ({ cat, delCat: visibles.filter((it) => categoriaPorId(it.categoria).id === cat.id) }))
-    .filter(({ delCat }) => delCat.length)
-    .map(({ cat, delCat }) => el('section', { class: 'seccion' },
-      el('h2', { class: 'seccion-titulo' }, cat.nombre, el('span', { class: 'contador', text: String(delCat.length) })),
-      ...gruposPorSubtipo(cat, delCat, onLlego),
+// ── Modo compras ─────────────────────────────────────────────
+
+/**
+ * Clasifica los productos para el Modo compras.
+ * "inicio" = cuándo empezó esta salida de compras: un "no se consiguió"
+ * de una salida ANTERIOR vuelve a "Por comprar" (con su nota).
+ */
+export function agruparCompras(items, inicio) {
+  const deHoy = (it) => it.estado_en && new Date(it.estado_en).getTime() >= inicio;
+  return {
+    porComprar: items.filter((it) => it.estado === 'pendiente' || (it.estado === 'no_conseguido' && !deHoy(it))),
+    enCarrito: items.filter((it) => it.estado === 'comprado'),
+    noHayHoy: items.filter((it) => it.estado === 'no_conseguido' && deHoy(it)),
+  };
+}
+
+function tarjetaCompra(item, { onComprado, onNoHay }) {
+  const nodo = el('li', { class: claseTarjeta(item, 'tarjeta-compra'), 'data-id': item.id },
+    infoTarjeta(item),
+    el('div', { class: 'botones-compra' },
+      el('button', {
+        type: 'button', class: 'btn-comprado',
+        'aria-label': `${tituloDe(item)}: comprado`,
+        onclick: () => onComprado(item, nodo),
+      }, '✓ Comprado'),
+      el('button', {
+        type: 'button', class: 'btn-no-hay',
+        'aria-label': `${tituloDe(item)}: no se consiguió`,
+        onclick: () => onNoHay(item, nodo),
+      }, '✗ No hay'),
+    ),
+  );
+  return nodo;
+}
+
+function tarjetaResuelta(item, { onDeshacer }) {
+  return el('li', { class: claseTarjeta(item, 'tarjeta-resuelta'), 'data-id': item.id },
+    infoTarjeta(item, { mostrarEstado: false }),
+    el('button', {
+      type: 'button', class: 'btn-deshacer',
+      'aria-label': `Deshacer ${tituloDe(item)}`,
+      onclick: () => onDeshacer(item),
+    }, 'Deshacer'),
+  );
+}
+
+export function dibujarCompras(contenedor, items, inicio, acciones) {
+  marcarPrimerDibujo(items);
+  const { porComprar, enCarrito, noHayHoy } = agruparCompras(items, inicio);
+  const nodos = [];
+
+  if (porComprar.length) {
+    nodos.push(...seccionesPorCategoria(porComprar, (it) => tarjetaCompra(it, acciones)));
+  } else {
+    nodos.push(el('div', { class: 'vacio-estado vacio-compras' },
+      el('div', { class: 'vacio-icono', 'aria-hidden': 'true', text: items.length ? '✅' : '🎉' }),
+      el('h2', { class: 'vacio-titulo', text: items.length ? '¡Revisaste todo!' : 'No hay nada por comprar' }),
+      el('p', { class: 'vacio-texto', text: items.length ? 'Toca "Terminar" arriba para cerrar la compra.' : 'La lista de faltantes está vacía.' }),
     ));
-  contenedor.replaceChildren(...secciones);
+  }
+
+  const resumen = (titulo, clase, lista) => lista.length && el('section', { class: `seccion seccion-resuelta ${clase}` },
+    el('h2', { class: 'seccion-titulo' }, titulo, el('span', { class: 'contador', text: String(lista.length) })),
+    el('ul', { class: 'tarjetas' }, ...lista.map((it) => tarjetaResuelta(it, acciones))),
+  );
+  nodos.push(resumen('🛒 En el carrito', 'resuelta-carrito', enCarrito));
+  nodos.push(resumen('✗ No se consiguió hoy', 'resuelta-no-hay', noHayHoy));
+  contenedor.replaceChildren(...nodos.filter(Boolean));
 }
 
 // ── Modal de confirmación ────────────────────────────────────
@@ -168,11 +282,13 @@ export function dibujarLista(contenedor, items, activa, { onLlego }) {
  * Muestra el modal propio y devuelve una Promesa con true/false.
  * Usa <dialog>: el navegador se encarga del foco y de cerrar con Escape.
  */
-export function confirmar({ titulo, mensaje, textoAceptar = 'Aceptar' }) {
+export function confirmar({ titulo, mensaje, textoAceptar = 'Aceptar', peligro = true }) {
   const modal = document.getElementById('modal');
   modal.querySelector('#modal-titulo').textContent = titulo;
   modal.querySelector('#modal-mensaje').textContent = mensaje;
-  modal.querySelector('#modal-aceptar').textContent = textoAceptar;
+  const aceptar = modal.querySelector('#modal-aceptar');
+  aceptar.textContent = textoAceptar;
+  aceptar.className = `btn ${peligro ? 'btn-peligro' : 'btn-principal'}`;
   modal.returnValue = '';
 
   return new Promise((resolver) => {

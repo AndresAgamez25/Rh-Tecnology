@@ -13,7 +13,7 @@
 import { obtenerCliente } from './supabase.js';
 
 const TABLA = 'faltantes';
-const COLUMNAS = 'id, categoria, subtipo, modelo, detalle, quedan, creado_en, creado_por';
+const COLUMNAS = 'id, categoria, subtipo, modelo, detalle, quedan, creado_en, creado_por, estado, estado_por, estado_en';
 
 let items = [];
 let canal = null;
@@ -95,6 +95,14 @@ export async function quitar(ids) {
   if (error) throw error;
   const fuera = new Set(ids);
   ponerItems(items.filter((it) => !fuera.has(it.id)));
+}
+
+/** Modo compras. Solo se puede cambiar "estado"; quién y cuándo lo pone el servidor. */
+export async function actualizarEstado(ids, estado) {
+  const { data, error } = await obtenerCliente()
+    .from(TABLA).update({ estado }).in('id', ids).select(COLUMNAS);
+  if (error) throw error;
+  fusionar(data);
 }
 
 export async function vaciar() {

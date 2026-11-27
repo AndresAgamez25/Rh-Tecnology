@@ -27,7 +27,7 @@ function semilla() {
     { categoria: 'cables', subtipo: null, modelo: 'Samsung', detalle: 'USB-C · carga rápida · 1 m', quedan: '', creado_por: 'Tú', creado_en: haceMinutos(60 * 26) },
     { categoria: 'audifonos', subtipo: 'inalambricos', modelo: 'Buds genéricos', detalle: '', quedan: 'solo blancos', creado_por: 'Jefe 1', creado_en: haceMinutos(5) },
     { categoria: 'otros', subtipo: null, modelo: 'Memoria 64GB', detalle: 'micro SD', quedan: '', creado_por: 'Tú', creado_en: haceMinutos(45) },
-  ].map((it) => ({ id: nuevoId(), ...it }));
+  ].map((it) => ({ id: nuevoId(), estado: 'pendiente', estado_por: '', estado_en: null, ...it }));
 }
 
 function cargar() {
@@ -76,6 +76,9 @@ export async function agregar(productos, autor = 'Tú') {
     quedan: p.quedan ?? '',
     creado_en: new Date().toISOString(),
     creado_por: autor,
+    estado: 'pendiente',
+    estado_por: '',
+    estado_en: null,
   }));
   cambiar([...items, ...nuevos]);
 }
@@ -84,6 +87,15 @@ export async function agregar(productos, autor = 'Tú') {
 export async function quitar(ids) {
   const fuera = new Set(ids);
   cambiar(items.filter((it) => !fuera.has(it.id)));
+}
+
+/** Modo compras: cambia el estado ('pendiente' | 'comprado' | 'no_conseguido'). */
+export async function actualizarEstado(ids, estado, autor = 'Tú') {
+  const cuales = new Set(ids);
+  const ahora = new Date().toISOString();
+  cambiar(items.map((it) => (cuales.has(it.id) && it.estado !== estado
+    ? { ...it, estado, estado_por: autor, estado_en: ahora }
+    : it)));
 }
 
 export async function vaciar() {

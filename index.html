@@ -10,7 +10,7 @@
   <title>RH Faltantes</title>
   <link rel="stylesheet" href="css/styles.css">
 </head>
-<body data-vista="cargando">
+<body data-vista="cargando" data-modo="lista">
   <!-- ───────── Pantalla de carga ───────── -->
   <div class="vista vista-cargando" aria-label="Cargando">
     <span class="marca-logo marca-logo-grande" aria-hidden="true">RH</span>
@@ -40,8 +40,8 @@
 
   <!-- ───────── App ───────── -->
   <div class="vista vista-app">
-  <!-- ───────── Encabezado ───────── -->
-  <header class="encabezado">
+  <!-- ───────── Encabezado (lista) ───────── -->
+  <header class="encabezado encabezado-lista">
     <div class="marca">
       <span class="marca-logo" aria-hidden="true">RH</span>
       <div>
@@ -55,6 +55,16 @@
     <button type="button" id="btn-reiniciar" class="btn btn-peligro-suave">
       Reiniciar lista
     </button>
+  </header>
+
+  <!-- ───────── Encabezado (modo compras) ───────── -->
+  <header class="encabezado encabezado-compras">
+    <div class="compras-titulo">
+      <h1 class="marca-nombre">🛒 Modo compras</h1>
+      <p class="marca-sub" id="compras-progreso" aria-live="polite"></p>
+    </div>
+    <button type="button" id="btn-terminar" class="btn btn-principal">Terminar</button>
+    <div class="progreso" aria-hidden="true"><div class="progreso-barra" id="compras-barra"></div></div>
   </header>
 
   <!-- ───────── Pestañas de categorías (se llenan desde JS) ───────── -->

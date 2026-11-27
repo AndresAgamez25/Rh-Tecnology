@@ -35,6 +35,7 @@ export const listar = () => fuenteActual().listar();
 export const agregar = (productos) => fuenteActual().agregar(productos);
 export const quitar = (ids) => fuenteActual().quitar(ids);
 export const vaciar = () => fuenteActual().vaciar();
+export const actualizarEstado = (ids, estado) => fuenteActual().actualizarEstado(ids, estado);
 
 export function suscribir(fn) {
   oyentes.add(fn);

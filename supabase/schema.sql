@@ -155,3 +155,68 @@ begin
     alter publication supabase_realtime add table public.faltantes;
   end if;
 end $$;
+
+
+-- ─────────────────────────────────────────────────────────────
+-- 7. MODO COMPRAS: estado de cada producto
+--    pendiente      → falta (estado normal)
+--    comprado       → un jefe lo compró; está "en camino" hasta que llegue
+--    no_conseguido  → lo buscaron y no lo encontraron; sigue en la lista
+-- ─────────────────────────────────────────────────────────────
+alter table public.faltantes
+  add column if not exists estado text not null default 'pendiente'
+    check (estado in ('pendiente','comprado','no_conseguido'));
+alter table public.faltantes add column if not exists estado_por text not null default '';
+alter table public.faltantes add column if not exists estado_en  timestamptz;
+
+-- Al insertar, el estado siempre empieza limpio (nadie puede falsearlo)
+create or replace function public.poner_autor()
+returns trigger
+language plpgsql security definer
+set search_path = ''
+as $$
+begin
+  new.creado_por := coalesce(
+    (select nombre from public.usuarios_permitidos where email = lower(auth.jwt() ->> 'email')),
+    'Desconocido'
+  );
+  new.creado_en  := now();
+  new.estado     := 'pendiente';
+  new.estado_por := '';
+  new.estado_en  := null;
+  return new;
+end;
+$$;
+
+-- Al cambiar el estado, el servidor anota quién y cuándo
+create or replace function public.poner_estado()
+returns trigger
+language plpgsql security definer
+set search_path = ''
+as $$
+begin
+  if new.estado is distinct from old.estado then
+    new.estado_por := coalesce(
+      (select nombre from public.usuarios_permitidos where email = lower(auth.jwt() ->> 'email')),
+      'Desconocido'
+    );
+    new.estado_en := now();
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists faltantes_poner_estado on public.faltantes;
+create trigger faltantes_poner_estado
+  before update on public.faltantes
+  for each row execute function public.poner_estado();
+
+-- La app SOLO puede cambiar la columna "estado" (permiso por columna)
+revoke update on public.faltantes from authenticated;
+grant  update (estado) on public.faltantes to authenticated;
+
+drop policy if exists "marcar estado" on public.faltantes;
+create policy "marcar estado" on public.faltantes
+  for update to authenticated
+  using ( (select public.es_permitido()) )
+  with check ( (select public.es_permitido()) );

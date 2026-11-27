@@ -83,8 +83,11 @@ teléfono del negocio.
 - **Número de orden**: serial automático **interno**. El cliente **nunca** lo ve (ni en WhatsApp, ni en
   el recibo, ni en la página del cliente). Para el cliente, el enlace usa el código secreto.
 - **Horario** (va en los mensajes y en la página del cliente): lunes a sábado, 8 a. m. a 7 p. m.
-- **Condiciones del taller** (recibo y página del cliente): "Pasados 30 días no se aceptan reclamos ni se
-  responde por el equipo" (texto final por confirmar con el dueño).
+- **Condiciones del taller** (confirmado, opción A): cuentan desde que el equipo queda **listo**.
+  Texto para el recibo, el WhatsApp al recibir y la página del cliente:
+  "Pasados 30 días desde que su equipo esté listo sin reclamarlo, RH Tecnology no responde por él.
+  No respondemos por la información guardada en el celular."
+  En "Por entregar" se muestra cuántos días lleva listo y un aviso al acercarse a los 30 días.
 - **Se agregan**:
   1. **Devolver sin reparar** (no tenía arreglo / no aceptó el precio / se lo lleva así): motivo y lo que
      se cobra (p. ej. revisión) → en Entregados como "No reparado".

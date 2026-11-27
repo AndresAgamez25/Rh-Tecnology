@@ -39,7 +39,7 @@ jobs:
           SUPABASE_PUBLISHABLE_KEY: ${{ secrets.SUPABASE_PUBLISHABLE_KEY }}
         run: |
           mkdir _site
-          cp -r index.html manifest.json sw.js css js icons _site/
+          cp -r index.html orden.html manifest.json sw.js css js icons _site/
           rm -f _site/js/config.js
           # config.js se crea aquí con los secrets (nunca está en el repositorio)
           if [ -n "$SUPABASE_URL" ] && [ -n "$SUPABASE_PUBLISHABLE_KEY" ]; then

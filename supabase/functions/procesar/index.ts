@@ -140,6 +140,103 @@ const ESQUEMA = {
   propertyOrdering: ['transcripcion', 'acciones', 'respuesta'],
 };
 
+// ── Modo "orden": recibir un equipo en servicio técnico ──────
+
+const INSTRUCCIONES_ORDEN = `Eres el asistente de recepción del taller de servicio técnico de RH TECNOLOGY (Corozal, Sucre, Colombia).
+Te dictan, escriben o muestran en foto los datos de un celular que un cliente deja para reparar. Extrae los datos en JSON.
+- cliente: nombre del cliente tal como lo dicen (con mayúscula inicial). telefono: solo dígitos (en Colombia suelen ser 10 y empezar por 3).
+- equipo: marca + modelo con la escritura oficial y el color si lo dicen (ej. "Samsung Galaxy A15 · negro", "Redmi A7 Pro · azul", "iPhone 11"). Corrige modelos mal dichos si es obvio.
+- imei: solo si lo dicen o se ve en la foto.
+- problema: lo que dice el cliente que tiene, corto (ej. "No carga", "Pantalla rota", "No enciende").
+- trabajos: lista de arreglos que se van a hacer, cada uno con su precio en pesos colombianos como entero
+  ("45 mil" = 45000, "ciento veinte" = 120000). Ej. "pantalla en 180 y tapa en 40" = [{"descripcion":"Pantalla","precio":180000},
+  {"descripcion":"Tapa","precio":40000}]. Descripción corta con mayúscula inicial ("Pantalla", "Tapa", "Pin de carga", "Batería").
+  Si solo dicen un valor total sin decir qué trabajos, deja trabajos vacía y pon ese valor en precio.
+- descuento: rebaja en pesos si la dicen ("le dejo todo en 200 mil" cuando los trabajos suman 220 mil = descuento 20000). 0 si no.
+- precio: valor total cotizado SOLO si no hay trabajos con precio; si hay trabajos, 0.
+- abono: lo que dejó abonado (número, 0 si nada). metodo_abono: "efectivo" | "qr" | "transferencia" ("Nequi", "Daviplata", "Bancolombia QR" = "qr").
+- claves: lista de opciones de desbloqueo (puede haber varias si el cliente no está seguro). Cada una:
+  tipo "pin" (números o contraseña; valor = el texto exacto) o "patron" (valor = secuencia de puntos de una cuadrícula 3x3 numerada
+  1 2 3 / 4 5 6 / 7 8 9, de arriba a la izquierda; ej. "en L" empezando arriba a la izquierda = [1,4,7,8,9]; "en Z" = [1,2,3,5,7,8,9];
+  "en C" = [3,2,1,4,7,8,9]; "en U" = [1,4,7,8,9,6,3]; "en N" = [7,4,1,5,9,6,3]; "en M" = [7,4,1,5,3,6,9]); nota = aclaración corta si la dan.
+  Si dice que no tiene clave, deja la lista vacía.
+- llego_con: de ["SIM","Memoria","Forro","Cargador","Caja"] los que mencione; cualquier otra cosa va en llego_con_otro.
+- estado_recibido: de ["Pantalla rota","Rayones","Golpes","Mojado","No enciende"] los que apliquen; otra cosa en estado_recibido_otro.
+- tecnico: "Osman" o "Erwin" solo si lo mencionan; si no, "".
+- transcripcion: si hubo audio, lo que dijo; si no, "".
+Usa "" o 0 o [] para lo que no se diga. No inventes datos.`;
+
+const ESQUEMA_ORDEN = {
+  type: 'OBJECT',
+  properties: {
+    transcripcion: { type: 'STRING' },
+    cliente: { type: 'STRING' }, telefono: { type: 'STRING' }, equipo: { type: 'STRING' },
+    imei: { type: 'STRING' }, problema: { type: 'STRING' },
+    trabajos: {
+      type: 'ARRAY',
+      items: {
+        type: 'OBJECT',
+        properties: { descripcion: { type: 'STRING' }, precio: { type: 'INTEGER' } },
+        required: ['descripcion', 'precio'],
+        propertyOrdering: ['descripcion', 'precio'],
+      },
+    },
+    descuento: { type: 'INTEGER' },
+    precio: { type: 'INTEGER' }, abono: { type: 'INTEGER' },
+    metodo_abono: { type: 'STRING', enum: ['efectivo', 'qr', 'transferencia'] },
+    claves: {
+      type: 'ARRAY',
+      items: {
+        type: 'OBJECT',
+        properties: {
+          tipo: { type: 'STRING', enum: ['pin', 'patron'] },
+          valor: { type: 'STRING', description: 'PIN/contraseña exacta; para patrón, los números separados por comas (ej. "1,4,7,8,9")' },
+          nota: { type: 'STRING' },
+        },
+        required: ['tipo', 'valor', 'nota'],
+        propertyOrdering: ['tipo', 'valor', 'nota'],
+      },
+    },
+    llego_con: { type: 'ARRAY', items: { type: 'STRING', enum: ['SIM', 'Memoria', 'Forro', 'Cargador', 'Caja'] } },
+    llego_con_otro: { type: 'STRING' },
+    estado_recibido: { type: 'ARRAY', items: { type: 'STRING', enum: ['Pantalla rota', 'Rayones', 'Golpes', 'Mojado', 'No enciende'] } },
+    estado_recibido_otro: { type: 'STRING' },
+    tecnico: { type: 'STRING', description: '"Osman", "Erwin" o "" si no lo dicen' },
+  },
+  required: ['transcripcion', 'cliente', 'telefono', 'equipo', 'imei', 'problema', 'trabajos', 'descuento', 'precio', 'abono', 'metodo_abono',
+    'claves', 'llego_con', 'llego_con_otro', 'estado_recibido', 'estado_recibido_otro', 'tecnico'],
+};
+
+function validarOrden(r: Record<string, any>) {
+  const entero = (v: unknown) => Math.max(0, Math.min(50_000_000, Math.round(Number(v) || 0)));
+  const de = (v: unknown, permitidos: string[]) => (Array.isArray(v) ? v : []).filter((x) => permitidos.includes(x));
+  const claves = (Array.isArray(r?.claves) ? r.claves : []).slice(0, 5).map((c: Record<string, unknown>) => {
+    if (c?.tipo === 'patron') {
+      const pasos = String(c.valor ?? '').split(/[^1-9]+/).map(Number).filter((n) => n >= 1 && n <= 9);
+      const unicos = pasos.filter((n, i) => pasos.indexOf(n) === i);
+      return unicos.length >= 2 ? { tipo: 'patron', valor: unicos, nota: texto(c.nota, 80) } : null;
+    }
+    const valor = texto(c?.valor, 40);
+    return valor ? { tipo: 'pin', valor, nota: texto(c?.nota, 80) } : null;
+  }).filter(Boolean);
+  const trabajos = (Array.isArray(r?.trabajos) ? r.trabajos : []).slice(0, 30)
+    .map((t: Record<string, unknown>) => ({ descripcion: texto(t?.descripcion, 120), precio: entero(t?.precio) }))
+    .filter((t: { descripcion: string }) => t.descripcion);
+  const suma = trabajos.reduce((s: number, t: { precio: number }) => s + t.precio, 0);
+  return {
+    trabajos, descuento: Math.min(entero(r?.descuento), suma),
+    cliente: texto(r?.cliente, 80), telefono: String(r?.telefono ?? '').replace(/\D/g, '').slice(0, 15),
+    equipo: texto(r?.equipo, 80), imei: texto(r?.imei, 30), problema: texto(r?.problema, 300),
+    precio: trabajos.length ? 0 : entero(r?.precio), abono: entero(r?.abono),
+    metodo_abono: ['efectivo', 'qr', 'transferencia'].includes(r?.metodo_abono) ? r.metodo_abono : 'efectivo',
+    claves,
+    llego_con: de(r?.llego_con, ['SIM', 'Memoria', 'Forro', 'Cargador', 'Caja']), llego_con_otro: texto(r?.llego_con_otro, 200),
+    estado_recibido: de(r?.estado_recibido, ['Pantalla rota', 'Rayones', 'Golpes', 'Mojado', 'No enciende']),
+    estado_recibido_otro: texto(r?.estado_recibido_otro, 200),
+    tecnico: ['Osman', 'Erwin'].includes(r?.tecnico) ? r.tecnico : '',
+  };
+}
+
 // ── Validación de lo que devuelve la IA ──────────────────────
 
 const texto = (v: unknown, max: number) =>
@@ -185,11 +282,14 @@ async function preguntarAGemini(mensaje: string, audio: Archivo | null, imagen: 
   if (mensaje) partes.push({ text: `MENSAJE:\n${mensaje}` });
   if (audio) partes.push({ text: 'AUDIO del usuario:' }, { inline_data: { mime_type: audio.mime, data: audio.base64 } });
   if (imagen) partes.push({ text: 'FOTO del producto:' }, { inline_data: { mime_type: imagen.mime, data: imagen.base64 } });
+  return llamarGemini(INSTRUCCIONES, ESQUEMA, partes);
+}
 
+async function llamarGemini(instrucciones: string, esquema: unknown, partes: Record<string, unknown>[]) {
   const cuerpo = JSON.stringify({
-    system_instruction: { parts: [{ text: INSTRUCCIONES }] },
+    system_instruction: { parts: [{ text: instrucciones }] },
     contents: [{ role: 'user', parts: partes }],
-    generationConfig: { temperature: 0.1, responseMimeType: 'application/json', responseSchema: ESQUEMA },
+    generationConfig: { temperature: 0.1, responseMimeType: 'application/json', responseSchema: esquema },
   });
 
   // Probamos los modelos en orden: si uno está saturado (503), sin cuota (429),
@@ -293,6 +393,26 @@ Deno.serve(async (req) => {
   const audio = leerArchivo(cuerpo.audio, 'audio/');
   const imagen = leerArchivo(cuerpo.imagen, 'image/');
   if (!mensaje && !audio && !imagen) return responder({ error: 'Mensaje vacío' }, 400);
+
+  // Modo "orden": datos de un equipo que llega a servicio técnico
+  if (cuerpo.modo === 'orden') {
+    try {
+      const perfil = await consultar('rpc/mi_perfil', token, { method: 'POST', body: '{}' });
+      if (!Array.isArray(perfil) || !perfil.length) return responder({ error: 'Sin permiso' }, 403);
+      if (!GEMINI_API_KEY) return responder({ error: 'Falta configurar GEMINI_API_KEY' }, 500);
+      const partes: Record<string, unknown>[] = [];
+      if (mensaje) partes.push({ text: `DATOS:\n${mensaje}` });
+      if (audio) partes.push({ text: 'AUDIO:' }, { inline_data: { mime_type: audio.mime, data: audio.base64 } });
+      if (imagen) partes.push({ text: 'FOTO del equipo o de sus datos:' }, { inline_data: { mime_type: imagen.mime, data: imagen.base64 } });
+      const r = await llamarGemini(INSTRUCCIONES_ORDEN, ESQUEMA_ORDEN, partes);
+      return responder({ orden: validarOrden(r), transcripcion: texto(r?.transcripcion, MAX_TEXTO), modelo: modeloActual });
+    } catch (error) {
+      const status = (error as { status?: number }).status;
+      if (status === 401 || status === 403) return responder({ error: 'Sesión vencida o sin permiso' }, 401);
+      console.error(error);
+      return responder({ error: 'No se pudo procesar con IA', detalle: (error as { detalle?: string }).detalle ?? (error as Error).message }, 502);
+    }
+  }
 
   try {
     const inicio = Date.now();

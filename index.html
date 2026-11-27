@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <!-- viewport-fit=cover permite usar toda la pantalla del iPhone (con notch) -->
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="description" content="Lista de productos faltantes de RH TECNOLOGY, Corozal (Sucre).">
+  <meta name="description" content="Faltantes y servicio técnico de RH TECNOLOGY, Corozal (Sucre).">
   <meta name="theme-color" content="#000000">
   <meta name="color-scheme" content="dark">
   <title>RH Tecnology</title>
@@ -21,7 +21,7 @@
 
   <link rel="stylesheet" href="css/styles.css">
 </head>
-<body data-vista="cargando" data-modo="lista">
+<body data-vista="cargando" data-modo="inicio">
   <!-- ───────── Bienvenida: el logo 2 s cada vez que se abre la app ───────── -->
   <div id="bienvenida" class="bienvenida" aria-hidden="true">
     <div class="bienvenida-marca">
@@ -41,7 +41,7 @@
     <form id="form-login" class="login-caja" novalidate>
       <img src="icons/logo.webp" alt="" class="login-logo" width="216" height="152">
       <h1 id="login-titulo" class="solo-lectores">RH TECNOLOGY</h1>
-      <p class="login-sub">Lista de faltantes · Corozal, Sucre</p>
+      <p class="login-sub">Faltantes y servicio técnico · Corozal, Sucre</p>
 
       <label class="campo">
         <span>Correo</span>
@@ -60,6 +60,12 @@
 
   <!-- ───────── App ───────── -->
   <div class="vista vista-app">
+  <!-- ───────── Inicio: Faltantes y Servicio técnico (se llena desde JS) ───────── -->
+  <section id="inicio" class="inicio" aria-label="Inicio"></section>
+
+  <!-- ───────── Servicio técnico (se llena desde js/servicio/app.js) ───────── -->
+  <div id="servicio" class="servicio"></div>
+
   <!-- ───────── Encabezado (lista) ───────── -->
   <header class="encabezado encabezado-lista">
     <div class="marca">
@@ -73,6 +79,7 @@
       </div>
     </div>
     <div class="encabezado-acciones">
+      <button type="button" id="btn-inicio" class="btn-icono btn-facturas" aria-label="Inicio" title="Inicio">🏠</button>
       <button type="button" id="btn-facturas" class="btn-icono btn-facturas" aria-label="Facturas e historial" title="Facturas e historial">🧾</button>
       <button type="button" id="btn-reiniciar" class="btn btn-peligro-suave">Reiniciar lista</button>
     </div>

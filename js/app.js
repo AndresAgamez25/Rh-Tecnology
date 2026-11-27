@@ -9,6 +9,7 @@ import * as auth from './auth.js';
 import { procesarConIA, configurarIA } from './ia.js';
 import * as media from './media.js';
 import * as ui from './ui.js';
+import * as servicio from './servicio/app.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -54,6 +55,9 @@ const elementos = {
   cancelarAudio: $('btn-cancelar-audio'),
   fotoBoton: $('btn-foto'),
   barraProgreso: $('compras-barra'),
+  inicio: $('inicio'),
+  servicio: $('servicio'),
+  btnInicio: $('btn-inicio'),
 };
 
 // ── Bienvenida ───────────────────────────────────────────────
@@ -93,11 +97,23 @@ const estado = {
   facturaNueva: null,
   panelRegistro: 'facturas', // 'facturas' | 'actividad'
   actividad: [],
+  // Apartado visible: 'inicio' | 'faltantes' | 'servicio'
+  seccion: 'inicio',
+  nombre: '',
 };
 
 // ── Render ───────────────────────────────────────────────────
 
 function render() {
+  if (estado.seccion === 'inicio' && !estado.comprasDesde) {
+    document.body.dataset.modo = 'inicio';
+    dibujarInicio();
+    return;
+  }
+  if (estado.seccion === 'servicio') {
+    document.body.dataset.modo = 'servicio';
+    return; // el servicio técnico se dibuja solo (js/servicio/app.js)
+  }
   const pantalla = estado.verFacturas ? 'facturas' : estado.comprasDesde ? 'compras' : 'lista';
   document.body.dataset.modo = pantalla;
   if (pantalla === 'facturas') {
@@ -126,6 +142,76 @@ function render() {
     instalar: debeMostrarInstalar() ? { onInstalar: instalarApp, onCerrar: cerrarAvisoInstalar } : null,
   });
 }
+
+// ── Inicio y apartados ───────────────────────────────────────
+
+function dibujarInicio() {
+  const { el } = ui;
+  const pendientes = estado.items.filter((it) => it.estado !== 'comprado').length;
+  const { activos, porEntregar } = servicio.contar();
+  const tarjeta = (icono, titulo, linea, clase, onclick) => el('button', { type: 'button', class: `inicio-tarjeta ${clase}`, onclick },
+    el('span', { class: 'inicio-icono', 'aria-hidden': 'true', text: icono }),
+    el('strong', { class: 'inicio-titulo', text: titulo }),
+    el('small', { class: 'inicio-linea', text: linea }));
+  elementos.inicio.replaceChildren(
+    el('header', { class: 'inicio-encabezado' },
+      el('img', { src: 'icons/logo.webp', alt: 'RH Tecnology', class: 'inicio-logo', width: 216, height: 152 }),
+      el('p', { class: 'marca-sub' }, estado.nombre || 'Corozal, Sucre',
+        estado.modo === 'supabase' ? el('button', { type: 'button', class: 'btn-enlace', onclick: salir }, ' · Salir') : null)),
+    el('div', { class: 'inicio-tarjetas' },
+      tarjeta('📋', 'Faltantes', pendientes ? `${pendientes} por comprar` : 'Todo al día', 'inicio-faltantes', () => irA('faltantes')),
+      tarjeta('🔧', 'Servicio técnico', `${activos} en el taller · ${porEntregar} por entregar`, 'inicio-servicio', () => irA('servicio'))),
+  );
+}
+
+function irA(seccion) {
+  if (estado.seccion === 'servicio' && seccion !== 'servicio') servicio.ocultar();
+  estado.seccion = seccion;
+  estado.verFacturas = false;
+  render();
+  window.scrollTo({ top: 0 });
+  if (seccion === 'servicio') servicio.mostrar();
+  else animarEntrada();
+}
+
+async function prepararServicio() {
+  try {
+    await servicio.iniciarServicio({
+      modo: estado.modo,
+      contenedor: elementos.servicio,
+      onInicio: () => irA('inicio'),
+      onCambio: () => { if (estado.seccion === 'inicio') render(); },
+    });
+  } catch (error) {
+    console.error('servicio técnico:', error);
+  }
+}
+
+/** "Descargar copia de todo": faltantes, facturas, actividad y servicio técnico en un archivo. */
+async function descargarCopia() {
+  ui.toast('⏳ Preparando la copia…');
+  try {
+    const [compras, actividad, taller] = await Promise.allSettled([datos.listarCompras(), datos.listarActividad(), servicio.datosParaCopia()]);
+    const valor = (r) => (r.status === 'fulfilled' ? r.value : null);
+    const copia = {
+      app: 'RH Tecnology', creada_en: new Date().toISOString(),
+      faltantes: estado.items, facturas: valor(compras), actividad: valor(actividad), servicio_tecnico: valor(taller),
+    };
+    const blob = new Blob([JSON.stringify(copia, null, 2)], { type: 'application/json' });
+    const enlace = Object.assign(document.createElement('a'), {
+      href: URL.createObjectURL(blob), download: `rh-tecnology-copia-${new Date().toISOString().slice(0, 10)}.json`,
+    });
+    document.body.append(enlace);
+    enlace.click();
+    enlace.remove();
+    setTimeout(() => URL.revokeObjectURL(enlace.href), 10_000);
+    ui.toast('⬇️ Copia descargada');
+  } catch (error) {
+    console.error(error);
+    ui.toast('No se pudo crear la copia.');
+  }
+}
+window.addEventListener('rh:copia', descargarCopia);
 
 function renderCompras() {
   limpiarBorrador();
@@ -523,6 +609,7 @@ elementos.salirCompras.addEventListener('click', salirDeCompras);
 elementos.terminarCompra.addEventListener('click', terminarCompra);
 elementos.facturas.addEventListener('click', () => abrirFacturas());
 elementos.volver.addEventListener('click', cerrarFacturas);
+elementos.btnInicio.addEventListener('click', () => irA('inicio'));
 
 // ── Audio ────────────────────────────────────────────────────
 
@@ -670,6 +757,8 @@ async function entrar(evento) {
 
 async function salir() {
   estado.usuarioId = null;
+  servicio.ocultar();
+  estado.seccion = 'inicio';
   await datos.detener();
   await auth.cerrarSesion();
   mostrarVista('login');
@@ -704,12 +793,15 @@ async function alCambiarUsuario(usuario, evento = 'directo') {
       return;
     }
     elementos.usuario.textContent = `Hola, ${nombre}`;
+    estado.nombre = `Hola, ${nombre}`;
     elementos.salir.hidden = false;
     await conTiempo(datos.usar('supabase'), 'cargar la lista');
     log('datos listos');
     estado.modo = 'supabase';
     estado.items = await datos.listar();
     log('faltantes:', estado.items.length);
+    await conTiempo(prepararServicio(), 'cargar el servicio técnico').catch((e) => console.error(e));
+    estado.seccion = estado.comprasDesde ? 'faltantes' : 'inicio';
     render();
     mostrarVista('app');
   } catch (error) {
@@ -725,6 +817,9 @@ async function iniciarModoDemo() {
   await datos.usar('demo');
   estado.modo = 'demo';
   estado.items = await datos.listar();
+  estado.nombre = 'Modo demo';
+  await prepararServicio();
+  estado.seccion = estado.comprasDesde ? 'faltantes' : 'inicio';
   render();
   mostrarVista('app');
 }

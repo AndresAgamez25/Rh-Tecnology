@@ -30,3 +30,21 @@ export async function procesarConIA(entrada) {
   if (!data || !Array.isArray(data.acciones)) throw new Error('Respuesta inválida de la IA');
   return data;
 }
+
+/**
+ * Servicio técnico: la IA llena el formulario de "Recibir equipo"
+ * a partir de un dictado, texto o foto. Devuelve { orden, transcripcion }.
+ */
+export async function procesarOrdenIA(entrada) {
+  const llamada = obtenerCliente().functions.invoke(nombreFuncion, { body: { ...entrada, modo: 'orden' } });
+  const limite = new Promise((_, rechazar) =>
+    setTimeout(() => rechazar(new Error('La IA tardó demasiado')), TIEMPO_MAXIMO));
+  const { data, error } = await Promise.race([llamada, limite]);
+  if (error) {
+    let detalle = '';
+    try { detalle = (await error.context?.json?.())?.detalle ?? ''; } catch { /* sin cuerpo */ }
+    throw new Error(detalle || error.message || 'La IA no respondió');
+  }
+  if (!data?.orden) throw new Error('Respuesta inválida de la IA');
+  return data;
+}

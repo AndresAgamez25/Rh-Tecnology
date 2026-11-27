@@ -516,3 +516,595 @@ end;
 $$;
 revoke all on function public.borrar_compra(uuid) from public, anon;
 grant execute on function public.borrar_compra(uuid) to authenticated;
+
+
+-- ═════════════════════════════════════════════════════════════
+-- 11. SERVICIO TÉCNICO
+--    ordenes        → un celular recibido (número interno: el cliente no lo ve)
+--    orden_eventos  → historial del arreglo (solo se agrega; nunca se edita/borra)
+--    orden_pagos    → abonos y pagos con su método
+--    orden_fotos    → fotos (se borran solas al mes; el texto queda)
+--    Todo se escribe con funciones (RPC) que validan las reglas y anotan
+--    quién hizo qué. Las órdenes ENTREGADAS no se pueden modificar ni borrar.
+-- ═════════════════════════════════════════════════════════════
+create table if not exists public.ordenes (
+  id                   uuid primary key default gen_random_uuid(),
+  numero               bigint generated always as identity unique,
+  codigo               text not null unique default replace(gen_random_uuid()::text, '-', ''),
+  estado               text not null default 'activo' check (estado in ('activo','por_entregar','entregado')),
+  resultado            text check (resultado in ('reparado','no_reparado')),
+  cliente              text not null check (char_length(cliente) between 1 and 80),
+  telefono             text not null default '' check (char_length(telefono) <= 20),
+  equipo               text not null default '' check (char_length(equipo) <= 80),
+  imei                 text not null default '' check (char_length(imei) <= 30),
+  problema             text not null default '' check (char_length(problema) <= 500),
+  claves               jsonb not null default '[]'::jsonb check (jsonb_typeof(claves) = 'array'),
+  llego_con            text[] not null default '{}',
+  llego_con_otro       text not null default '' check (char_length(llego_con_otro) <= 200),
+  estado_recibido      text[] not null default '{}',
+  estado_recibido_otro text not null default '' check (char_length(estado_recibido_otro) <= 200),
+  tecnico              text not null default 'Osman' check (char_length(tecnico) between 1 and 40),
+  precio               integer not null default 0 check (precio between 0 and 50000000),
+  -- Trabajos con su precio: [{"descripcion":"Pantalla","precio":180000}, …]. precio = suma − descuento
+  trabajos             jsonb not null default '[]'::jsonb check (jsonb_typeof(trabajos) = 'array'),
+  descuento            integer not null default 0 check (descuento between 0 and 50000000),
+  resumen              text not null default '' check (char_length(resumen) <= 1000),
+  creado_en            timestamptz not null default now(),
+  creado_por           text not null default '',
+  listo_en             timestamptz,
+  entregado_en         timestamptz,
+  entregado_por        text
+);
+create index if not exists ordenes_estado_idx on public.ordenes (estado, creado_en desc);
+-- (para bases creadas antes de que existieran los trabajos con precio)
+alter table public.ordenes add column if not exists trabajos jsonb not null default '[]'::jsonb
+  check (jsonb_typeof(trabajos) = 'array');
+alter table public.ordenes add column if not exists descuento integer not null default 0
+  check (descuento between 0 and 50000000);
+
+create table if not exists public.orden_eventos (
+  id         bigint generated always as identity primary key,
+  orden_id   uuid not null references public.ordenes(id),
+  creado_en  timestamptz not null default now(),
+  autor      text not null,
+  tipo       text not null check (tipo in ('recibido','trabajo','precio','foto','listo','devuelto','pago',
+                                           'entregado','nota','edicion','whatsapp','formateo','clave','reabierto')),
+  texto      text not null default '' check (char_length(texto) <= 1000),
+  datos      jsonb not null default '{}'::jsonb
+);
+create index if not exists orden_eventos_orden_idx on public.orden_eventos (orden_id, id);
+
+create table if not exists public.orden_pagos (
+  id         bigint generated always as identity primary key,
+  orden_id   uuid not null references public.ordenes(id),
+  creado_en  timestamptz not null default now(),
+  cobro      text not null,
+  monto      integer not null check (monto > 0 and monto <= 50000000),
+  metodo     text not null check (metodo in ('efectivo','qr','transferencia')),
+  tipo       text not null check (tipo in ('abono','pago'))
+);
+create index if not exists orden_pagos_fecha_idx on public.orden_pagos (creado_en desc);
+
+create table if not exists public.orden_fotos (
+  id               uuid primary key default gen_random_uuid(),
+  orden_id         uuid not null references public.ordenes(id),
+  ruta             text not null unique,
+  etiqueta         text not null default '' check (char_length(etiqueta) <= 80),
+  momento          text not null default 'trabajo' check (momento in ('recibido','trabajo','resultado')),
+  visible_cliente  boolean not null default true,
+  creado_en        timestamptz not null default now(),
+  autor            text not null,
+  borrada_en       timestamptz
+);
+create index if not exists orden_fotos_orden_idx on public.orden_fotos (orden_id);
+
+-- Solo lectura desde la app; todo cambio pasa por las funciones de abajo
+do $$
+declare t text;
+begin
+  foreach t in array array['ordenes','orden_eventos','orden_pagos','orden_fotos'] loop
+    execute format('alter table public.%I enable row level security', t);
+    execute format('revoke all on public.%I from anon, authenticated', t);
+    execute format('grant select on public.%I to authenticated', t);
+    execute format('drop policy if exists "leer %s" on public.%I', t, t);
+    execute format('create policy "leer %s" on public.%I for select to authenticated using ((select public.es_permitido()))', t, t);
+  end loop;
+end $$;
+
+-- Las órdenes NUNCA se borran, y las ENTREGADAS no se modifican
+create or replace function public.proteger_ordenes()
+returns trigger language plpgsql set search_path = ''
+as $$
+begin
+  if tg_op = 'DELETE' then
+    raise exception 'Las órdenes de servicio técnico no se pueden borrar' using errcode = '42501';
+  end if;
+  if old.estado = 'entregado' then
+    raise exception 'Las órdenes entregadas no se pueden modificar' using errcode = '42501';
+  end if;
+  return new;
+end;
+$$;
+drop trigger if exists ordenes_proteger on public.ordenes;
+create trigger ordenes_proteger before update or delete on public.ordenes
+  for each row execute function public.proteger_ordenes();
+
+-- Eventos y pagos: solo se agregan
+create or replace function public.solo_agregar()
+returns trigger language plpgsql set search_path = ''
+as $$
+begin
+  raise exception 'El historial y los pagos no se pueden modificar ni borrar' using errcode = '42501';
+end;
+$$;
+drop trigger if exists orden_eventos_solo_agregar on public.orden_eventos;
+create trigger orden_eventos_solo_agregar before update or delete on public.orden_eventos
+  for each row execute function public.solo_agregar();
+drop trigger if exists orden_pagos_solo_agregar on public.orden_pagos;
+create trigger orden_pagos_solo_agregar before update or delete on public.orden_pagos
+  for each row execute function public.solo_agregar();
+
+-- ── Ayudantes ────────────────────────────────────────────────
+create or replace function public.pesos(n integer)
+returns text language sql immutable set search_path = ''
+as $$ select '$' || replace(to_char(coalesce(n, 0), 'FM999,999,999'), ',', '.'); $$;
+
+create or replace function public.requiere_permiso()
+returns text language plpgsql stable security definer set search_path = ''
+as $$
+declare yo text;
+begin
+  yo := (select nombre from public.usuarios_permitidos where email = lower(auth.jwt() ->> 'email'));
+  if yo is null then
+    raise exception 'Sin permiso' using errcode = '42501';
+  end if;
+  return yo;
+end;
+$$;
+
+create or replace function public.orden_para_cambiar(p_id uuid)
+returns public.ordenes language plpgsql security definer set search_path = ''
+as $$
+declare o public.ordenes;
+begin
+  select * into o from public.ordenes where id = p_id for update;
+  if o.id is null then raise exception 'La orden no existe' using errcode = 'P0002'; end if;
+  if o.estado = 'entregado' then
+    raise exception 'Las órdenes entregadas no se pueden modificar' using errcode = '42501';
+  end if;
+  return o;
+end;
+$$;
+
+create or replace function public.evento(p_orden uuid, p_autor text, p_tipo text, p_texto text, p_datos jsonb default '{}')
+returns void language sql security definer set search_path = ''
+as $$
+  insert into public.orden_eventos (orden_id, autor, tipo, texto, datos)
+  values (p_orden, p_autor, p_tipo, left(coalesce(p_texto, ''), 1000), coalesce(p_datos, '{}'));
+$$;
+
+create or replace function public.lista_texto(j jsonb)
+returns text[] language sql immutable set search_path = ''
+as $$ select coalesce(array(select left(x, 40) from jsonb_array_elements_text(coalesce(j, '[]')) x limit 20), '{}'); $$;
+
+-- Trabajos: deja solo {descripcion, precio} válidos (máx. 30, descripción 1–120, precio ≥ 0)
+create or replace function public.limpiar_trabajos(t jsonb)
+returns jsonb language sql immutable set search_path = ''
+as $$
+  select coalesce(jsonb_agg(jsonb_build_object('descripcion', x.d, 'precio', x.p) order by x.n), '[]'::jsonb)
+  from (
+    select left(trim(e ->> 'descripcion'), 120) d,
+           least(greatest(coalesce(round((e ->> 'precio')::numeric)::integer, 0), 0), 50000000) p, n
+    from jsonb_array_elements(case when jsonb_typeof(t) = 'array' then t else '[]'::jsonb end) with ordinality as a(e, n)
+    where jsonb_typeof(e) = 'object' and char_length(trim(coalesce(e ->> 'descripcion', ''))) > 0
+    order by n limit 30
+  ) x;
+$$;
+
+create or replace function public.suma_trabajos(t jsonb)
+returns integer language sql immutable set search_path = ''
+as $$ select coalesce(sum((e ->> 'precio')::integer), 0)::integer from jsonb_array_elements(coalesce(t, '[]')) e; $$;
+
+-- "Pantalla $180.000 + Tapa $40.000"
+create or replace function public.texto_trabajos(t jsonb)
+returns text language sql immutable set search_path = ''
+as $$
+  select coalesce(string_agg((e ->> 'descripcion') || ' ' || public.pesos((e ->> 'precio')::integer), ' + ' order by n), '')
+  from jsonb_array_elements(coalesce(t, '[]')) with ordinality as a(e, n);
+$$;
+
+-- ── Recibir equipo ───────────────────────────────────────────
+create or replace function public.crear_orden(d jsonb)
+returns public.ordenes language plpgsql security definer set search_path = ''
+as $$
+declare
+  yo text := public.requiere_permiso();
+  o public.ordenes;
+  abono integer := greatest(coalesce((d ->> 'abono')::integer, 0), 0);
+  metodo text := coalesce(nullif(d ->> 'metodo_abono', ''), 'efectivo');
+  trab jsonb := public.limpiar_trabajos(d -> 'trabajos');
+  descu integer := greatest(coalesce((d ->> 'descuento')::integer, 0), 0);
+  total integer;
+begin
+  -- Con trabajos, el precio es la suma menos el descuento; sin trabajos, el precio que llegue
+  if jsonb_array_length(trab) > 0 then
+    descu := least(descu, public.suma_trabajos(trab));
+    total := public.suma_trabajos(trab) - descu;
+  else
+    descu := 0;
+    total := greatest(coalesce((d ->> 'precio')::integer, 0), 0);
+  end if;
+  insert into public.ordenes (cliente, telefono, equipo, imei, problema, claves, llego_con, llego_con_otro,
+                              estado_recibido, estado_recibido_otro, tecnico, precio, trabajos, descuento, creado_por)
+  values (trim(d ->> 'cliente'), left(coalesce(d ->> 'telefono', ''), 20), left(coalesce(d ->> 'equipo', ''), 80),
+          left(coalesce(d ->> 'imei', ''), 30), left(coalesce(d ->> 'problema', ''), 500),
+          coalesce(d -> 'claves', '[]'), public.lista_texto(d -> 'llego_con'), left(coalesce(d ->> 'llego_con_otro', ''), 200),
+          public.lista_texto(d -> 'estado_recibido'), left(coalesce(d ->> 'estado_recibido_otro', ''), 200),
+          coalesce(nullif(d ->> 'tecnico', ''), 'Osman'), total, trab, descu, yo)
+  returning * into o;
+
+  perform public.evento(o.id, yo, 'recibido',
+    'Llegó: ' || coalesce(nullif(o.problema, ''), 'sin descripción') || '. Cotizado ' || public.pesos(o.precio)
+      || case when jsonb_array_length(trab) > 0 then ' (' || public.texto_trabajos(trab)
+           || case when descu > 0 then ' − descuento ' || public.pesos(descu) else '' end || ')' else '' end || '.',
+    jsonb_build_object('precio', o.precio, 'trabajos', trab, 'descuento', descu));
+  if abono > 0 then
+    insert into public.orden_pagos (orden_id, cobro, monto, metodo, tipo) values (o.id, yo, abono, metodo, 'abono');
+    perform public.evento(o.id, yo, 'pago', 'Abonó ' || public.pesos(abono) || ' (' || metodo || ').',
+      jsonb_build_object('monto', abono, 'metodo', metodo));
+  end if;
+  perform public.anotar('servicio', yo || ' recibió ' || coalesce(nullif(o.equipo, ''), 'un equipo') || ' de ' || o.cliente);
+  return o;
+end;
+$$;
+
+-- ── Editar datos (cliente, equipo, claves, técnico…) ─────────
+create or replace function public.actualizar_orden(p_id uuid, d jsonb)
+returns public.ordenes language plpgsql security definer set search_path = ''
+as $$
+declare
+  yo text := public.requiere_permiso();
+  o public.ordenes := public.orden_para_cambiar(p_id);
+  n public.ordenes;
+  cambios text[] := '{}';
+begin
+  update public.ordenes set
+    cliente = coalesce(nullif(trim(d ->> 'cliente'), ''), cliente),
+    telefono = left(coalesce(d ->> 'telefono', telefono), 20),
+    equipo = left(coalesce(d ->> 'equipo', equipo), 80),
+    imei = left(coalesce(d ->> 'imei', imei), 30),
+    problema = left(coalesce(d ->> 'problema', problema), 500),
+    claves = coalesce(d -> 'claves', claves),
+    llego_con = case when d ? 'llego_con' then public.lista_texto(d -> 'llego_con') else llego_con end,
+    llego_con_otro = left(coalesce(d ->> 'llego_con_otro', llego_con_otro), 200),
+    estado_recibido = case when d ? 'estado_recibido' then public.lista_texto(d -> 'estado_recibido') else estado_recibido end,
+    estado_recibido_otro = left(coalesce(d ->> 'estado_recibido_otro', estado_recibido_otro), 200),
+    tecnico = coalesce(nullif(d ->> 'tecnico', ''), tecnico)
+  where id = p_id returning * into n;
+
+  if n.tecnico is distinct from o.tecnico then
+    perform public.evento(p_id, yo, 'edicion', 'Técnico: ' || o.tecnico || ' → ' || n.tecnico || '.');
+  end if;
+  if n.claves is distinct from o.claves then
+    perform public.evento(p_id, yo, 'clave', coalesce(nullif(d ->> 'nota_clave', ''), 'Se actualizaron las claves.'));
+  end if;
+  if n.cliente is distinct from o.cliente then cambios := cambios || 'cliente'; end if;
+  if n.telefono is distinct from o.telefono then cambios := cambios || 'teléfono'; end if;
+  if n.equipo is distinct from o.equipo then cambios := cambios || 'equipo'; end if;
+  if n.imei is distinct from o.imei then cambios := cambios || 'IMEI'; end if;
+  if n.problema is distinct from o.problema then cambios := cambios || 'problema'; end if;
+  if n.llego_con is distinct from o.llego_con or n.llego_con_otro is distinct from o.llego_con_otro then cambios := cambios || 'llegó con'; end if;
+  if n.estado_recibido is distinct from o.estado_recibido or n.estado_recibido_otro is distinct from o.estado_recibido_otro then cambios := cambios || 'estado al recibir'; end if;
+  if array_length(cambios, 1) > 0 then
+    perform public.evento(p_id, yo, 'edicion', 'Se editó: ' || array_to_string(cambios, ', ') || '.');
+  end if;
+  return n;
+end;
+$$;
+
+-- ── Historial: trabajo, nota, autorización de formateo, aviso de WhatsApp ──
+create or replace function public.agregar_evento(p_id uuid, p_tipo text, p_texto text)
+returns void language plpgsql security definer set search_path = ''
+as $$
+declare yo text := public.requiere_permiso(); o public.ordenes;
+begin
+  select * into o from public.ordenes where id = p_id;
+  if o.id is null then raise exception 'La orden no existe' using errcode = 'P0002'; end if;
+  if p_tipo not in ('trabajo','nota','formateo','whatsapp') then
+    raise exception 'Tipo no permitido' using errcode = '22023';
+  end if;
+  -- En una orden entregada solo se pueden agregar NOTAS (y avisos de WhatsApp)
+  if o.estado = 'entregado' and p_tipo not in ('nota','whatsapp') then
+    raise exception 'Las órdenes entregadas no se pueden modificar' using errcode = '42501';
+  end if;
+  if char_length(trim(coalesce(p_texto, ''))) < 2 then
+    raise exception 'Escribe qué se hizo' using errcode = '22023';
+  end if;
+  perform public.evento(p_id, yo, p_tipo, trim(p_texto));
+end;
+$$;
+
+-- ── Cambiar precio (motivo obligatorio) ──────────────────────
+create or replace function public.cambiar_precio(p_id uuid, p_nuevo integer, p_motivo text)
+returns public.ordenes language plpgsql security definer set search_path = ''
+as $$
+declare yo text := public.requiere_permiso(); o public.ordenes := public.orden_para_cambiar(p_id); n public.ordenes;
+begin
+  if char_length(trim(coalesce(p_motivo, ''))) < 3 then
+    raise exception 'Escribe por qué cambia el precio' using errcode = '22023';
+  end if;
+  if p_nuevo is null or p_nuevo < 0 then raise exception 'Precio inválido' using errcode = '22023'; end if;
+  update public.ordenes set precio = p_nuevo where id = p_id returning * into n;
+  perform public.evento(p_id, yo, 'precio',
+    'Precio ' || public.pesos(o.precio) || ' → ' || public.pesos(p_nuevo) || '. Motivo: ' || trim(p_motivo),
+    jsonb_build_object('antes', o.precio, 'despues', p_nuevo));
+  return n;
+end;
+$$;
+
+-- ── Trabajos con precio y descuento (el total se calcula aquí) ──
+-- Sirve en "Activos" y en "Por entregar" (p. ej. un descuento al recoger).
+create or replace function public.guardar_trabajos(p_id uuid, p_trabajos jsonb, p_descuento integer, p_motivo text)
+returns public.ordenes language plpgsql security definer set search_path = ''
+as $$
+declare
+  yo text := public.requiere_permiso();
+  o public.ordenes := public.orden_para_cambiar(p_id);
+  n public.ordenes;
+  trab jsonb := public.limpiar_trabajos(p_trabajos);
+  descu integer;
+  partes text[] := '{}';
+  e jsonb;
+  antes jsonb;
+begin
+  if o.resultado = 'no_reparado' then
+    raise exception 'Este equipo se devolvió sin reparar: vuélvelo al taller para cambiar trabajos' using errcode = '22023';
+  end if;
+  descu := least(greatest(coalesce(p_descuento, 0), 0), public.suma_trabajos(trab));
+
+  -- Qué cambió (comparando por descripción), para el historial
+  for e in select * from jsonb_array_elements(trab) loop
+    select x into antes from jsonb_array_elements(o.trabajos) x where lower(x ->> 'descripcion') = lower(e ->> 'descripcion') limit 1;
+    if antes is null then
+      partes := partes || ('+ ' || (e ->> 'descripcion') || ' ' || public.pesos((e ->> 'precio')::integer));
+    elsif (antes ->> 'precio')::integer <> (e ->> 'precio')::integer then
+      partes := partes || ((e ->> 'descripcion') || ' ' || public.pesos((antes ->> 'precio')::integer)
+                           || ' → ' || public.pesos((e ->> 'precio')::integer));
+    end if;
+  end loop;
+  for e in select * from jsonb_array_elements(o.trabajos) loop
+    if not exists (select 1 from jsonb_array_elements(trab) x where lower(x ->> 'descripcion') = lower(e ->> 'descripcion')) then
+      partes := partes || ('− ' || (e ->> 'descripcion'));
+    end if;
+  end loop;
+  if descu <> o.descuento then
+    partes := partes || ('Descuento ' || public.pesos(descu));
+  end if;
+
+  update public.ordenes set trabajos = trab, descuento = descu, precio = public.suma_trabajos(trab) - descu
+  where id = p_id returning * into n;
+
+  if array_length(partes, 1) > 0 or n.precio <> o.precio then
+    perform public.evento(p_id, yo, 'precio',
+      array_to_string(partes, ' · ')
+        || case when n.precio <> o.precio then '. Total ' || public.pesos(o.precio) || ' → ' || public.pesos(n.precio) else '' end
+        || case when char_length(trim(coalesce(p_motivo, ''))) > 0 then '. Motivo: ' || trim(p_motivo) else '' end || '.',
+      jsonb_build_object('antes', o.precio, 'despues', n.precio, 'trabajos', trab, 'descuento', descu));
+  end if;
+  return n;
+end;
+$$;
+
+-- ── Abono adicional ──────────────────────────────────────────
+create or replace function public.registrar_abono(p_id uuid, p_monto integer, p_metodo text)
+returns void language plpgsql security definer set search_path = ''
+as $$
+declare yo text := public.requiere_permiso(); o public.ordenes := public.orden_para_cambiar(p_id);
+begin
+  insert into public.orden_pagos (orden_id, cobro, monto, metodo, tipo) values (p_id, yo, p_monto, p_metodo, 'abono');
+  perform public.evento(p_id, yo, 'pago', 'Abonó ' || public.pesos(p_monto) || ' (' || p_metodo || ').',
+    jsonb_build_object('monto', p_monto, 'metodo', p_metodo));
+end;
+$$;
+
+-- ── Fotos ────────────────────────────────────────────────────
+create or replace function public.agregar_foto(p_orden uuid, p_ruta text, p_etiqueta text, p_momento text)
+returns public.orden_fotos language plpgsql security definer set search_path = ''
+as $$
+declare yo text := public.requiere_permiso(); o public.ordenes := public.orden_para_cambiar(p_orden); f public.orden_fotos;
+begin
+  if p_ruta not like p_orden::text || '/%' then raise exception 'Ruta inválida' using errcode = '22023'; end if;
+  insert into public.orden_fotos (orden_id, ruta, etiqueta, momento, visible_cliente, autor)
+  values (p_orden, p_ruta, left(coalesce(p_etiqueta, ''), 80), coalesce(nullif(p_momento, ''), 'trabajo'),
+          coalesce(nullif(p_momento, ''), 'trabajo') <> 'recibido', yo)
+  returning * into f;
+  perform public.evento(p_orden, yo, 'foto', '📷 ' || coalesce(nullif(f.etiqueta, ''), 'Foto'), jsonb_build_object('foto', f.id));
+  return f;
+end;
+$$;
+
+-- Marca como borradas las fotos vencidas (la app borra el archivo y luego llama esto)
+create or replace function public.marcar_fotos_borradas(p_ids uuid[])
+returns integer language plpgsql security definer set search_path = ''
+as $$
+declare n integer;
+begin
+  perform public.requiere_permiso();
+  update public.orden_fotos set borrada_en = now()
+  where id = any(p_ids) and borrada_en is null and creado_en < now() - interval '30 days';
+  get diagnostics n = row_count;
+  return n;
+end;
+$$;
+
+-- ── Listo / devolver sin reparar / reabrir ───────────────────
+create or replace function public.marcar_listo(p_id uuid, p_resumen text, p_fotos uuid[])
+returns public.ordenes language plpgsql security definer set search_path = ''
+as $$
+declare yo text := public.requiere_permiso(); o public.ordenes := public.orden_para_cambiar(p_id); n public.ordenes;
+begin
+  if o.estado <> 'activo' then raise exception 'La orden ya está lista' using errcode = '22023'; end if;
+  update public.orden_fotos set visible_cliente = (id = any(coalesce(p_fotos, '{}'))) where orden_id = p_id;
+  update public.ordenes set estado = 'por_entregar', resultado = 'reparado', listo_en = now(),
+         resumen = left(coalesce(p_resumen, ''), 1000)
+  where id = p_id returning * into n;
+  perform public.evento(p_id, yo, 'listo', 'Listo para entregar ✓');
+  perform public.anotar('servicio', yo || ' marcó listo ' || coalesce(nullif(n.equipo, ''), 'un equipo') || ' de ' || n.cliente);
+  return n;
+end;
+$$;
+
+create or replace function public.devolver_sin_reparar(p_id uuid, p_motivo text, p_cobro integer)
+returns public.ordenes language plpgsql security definer set search_path = ''
+as $$
+declare yo text := public.requiere_permiso(); o public.ordenes := public.orden_para_cambiar(p_id); n public.ordenes;
+begin
+  if o.estado <> 'activo' then raise exception 'La orden ya está lista' using errcode = '22023'; end if;
+  if char_length(trim(coalesce(p_motivo, ''))) < 3 then
+    raise exception 'Escribe por qué no se reparó' using errcode = '22023';
+  end if;
+  update public.ordenes set estado = 'por_entregar', resultado = 'no_reparado', listo_en = now(),
+         precio = greatest(coalesce(p_cobro, 0), 0), resumen = left(trim(p_motivo), 1000)
+  where id = p_id returning * into n;
+  perform public.evento(p_id, yo, 'devuelto',
+    'No se reparó: ' || trim(p_motivo) || '. Se cobra ' || public.pesos(n.precio) || '.',
+    jsonb_build_object('antes', o.precio, 'cobro', n.precio));
+  return n;
+end;
+$$;
+
+create or replace function public.reabrir_orden(p_id uuid, p_motivo text)
+returns public.ordenes language plpgsql security definer set search_path = ''
+as $$
+declare yo text := public.requiere_permiso(); o public.ordenes := public.orden_para_cambiar(p_id); n public.ordenes;
+begin
+  if o.estado <> 'por_entregar' then raise exception 'La orden no está por entregar' using errcode = '22023'; end if;
+  -- Si venía de "no reparado" y tiene trabajos, el precio vuelve a ser la suma de los trabajos
+  update public.ordenes set estado = 'activo', resultado = null, listo_en = null,
+         precio = case when o.resultado = 'no_reparado' and jsonb_array_length(o.trabajos) > 0
+                       then public.suma_trabajos(o.trabajos) - o.descuento else precio end
+  where id = p_id returning * into n;
+  perform public.evento(p_id, yo, 'reabierto', 'Volvió al taller: ' || coalesce(nullif(trim(p_motivo), ''), 'sin motivo'));
+  return n;
+end;
+$$;
+
+-- ── Cobrar y entregar (pasa solo a Entregados) ───────────────
+create or replace function public.entregar_orden(p_id uuid, p_pagos jsonb)
+returns public.ordenes language plpgsql security definer set search_path = ''
+as $$
+declare
+  yo text := public.requiere_permiso();
+  o public.ordenes := public.orden_para_cambiar(p_id);
+  n public.ordenes;
+  p jsonb;
+  total integer;
+  hoy text := '';
+begin
+  if o.estado <> 'por_entregar' then raise exception 'Primero marca el equipo como listo' using errcode = '22023'; end if;
+  for p in select * from jsonb_array_elements(coalesce(p_pagos, '[]')) loop
+    if coalesce((p ->> 'monto')::integer, 0) > 0 then
+      insert into public.orden_pagos (orden_id, cobro, monto, metodo, tipo)
+      values (p_id, yo, (p ->> 'monto')::integer, p ->> 'metodo', 'pago');
+      hoy := hoy || case when hoy = '' then '' else ' + ' end || public.pesos((p ->> 'monto')::integer) || ' (' || (p ->> 'metodo') || ')';
+    end if;
+  end loop;
+  select coalesce(sum(monto), 0) into total from public.orden_pagos where orden_id = p_id;
+  if total < o.precio then
+    raise exception 'Falta por pagar %', public.pesos(o.precio - total) using errcode = '22023';
+  end if;
+  if hoy <> '' then
+    perform public.evento(p_id, yo, 'pago', 'Pagó ' || hoy || '.');
+  end if;
+  update public.ordenes set estado = 'entregado', entregado_en = now(), entregado_por = yo
+  where id = p_id returning * into n;
+  perform public.evento(p_id, yo, 'entregado',
+    case when n.resultado = 'no_reparado' then 'Entregado sin reparar.' else 'Entregado al cliente.' end);
+  perform public.anotar('servicio', yo || ' entregó ' || coalesce(nullif(n.equipo, ''), 'un equipo') || ' de ' || n.cliente
+    || ' (' || public.pesos(n.precio) || ')');
+  return n;
+end;
+$$;
+
+-- ── Página del cliente (la llama SOLO la Edge Function orden-cliente) ──
+-- Devuelve lo mínimo: equipo, nombre, lo que se hizo, saldo y fotos elegidas.
+-- Nunca claves, IMEI, teléfono ni número de orden. Vence a los 30 días de "listo".
+create or replace function public.orden_publica(p_codigo text)
+returns jsonb language sql stable security definer set search_path = ''
+as $$
+  select jsonb_build_object(
+    'equipo', o.equipo,
+    'nombre', split_part(o.cliente, ' ', 1),
+    'estado', o.estado,
+    'resultado', o.resultado,
+    'resumen', o.resumen,
+    'precio', o.precio,
+    'trabajos', case when o.resultado = 'reparado' then o.trabajos else '[]'::jsonb end,
+    'descuento', case when o.resultado = 'reparado' then o.descuento else 0 end,
+    'pagado', (select coalesce(sum(monto), 0) from public.orden_pagos where orden_id = o.id),
+    'listo_en', o.listo_en,
+    'vence', o.listo_en + interval '30 days',
+    'fotos', coalesce((select jsonb_agg(jsonb_build_object('ruta', f.ruta, 'etiqueta', f.etiqueta, 'momento', f.momento)
+                                         order by f.creado_en)
+                       from public.orden_fotos f
+                       where f.orden_id = o.id and f.visible_cliente and f.borrada_en is null), '[]'))
+  from public.ordenes o
+  where o.codigo = p_codigo and o.listo_en is not null and o.listo_en > now() - interval '30 days';
+$$;
+
+-- Permisos de las funciones
+do $$
+declare f text;
+begin
+  foreach f in array array[
+    'crear_orden(jsonb)', 'actualizar_orden(uuid,jsonb)', 'agregar_evento(uuid,text,text)',
+    'cambiar_precio(uuid,integer,text)', 'registrar_abono(uuid,integer,text)', 'guardar_trabajos(uuid,jsonb,integer,text)',
+    'agregar_foto(uuid,text,text,text)', 'marcar_fotos_borradas(uuid[])',
+    'marcar_listo(uuid,text,uuid[])', 'devolver_sin_reparar(uuid,text,integer)',
+    'reabrir_orden(uuid,text)', 'entregar_orden(uuid,jsonb)'] loop
+    execute format('revoke all on function public.%s from public, anon', f);
+    execute format('grant execute on function public.%s to authenticated', f);
+  end loop;
+  foreach f in array array['requiere_permiso()', 'orden_para_cambiar(uuid)',
+    'evento(uuid,text,text,text,jsonb)', 'orden_publica(text)'] loop
+    execute format('revoke all on function public.%s from public, anon, authenticated', f);
+  end loop;
+end $$;
+
+-- La página del cliente la consulta la Edge Function con la clave de servicio
+do $$
+begin
+  if exists (select 1 from pg_roles where rolname = 'service_role') then
+    grant execute on function public.orden_publica(text) to service_role;
+  end if;
+end $$;
+
+-- Tiempo real: órdenes y su historial
+do $$
+declare t text;
+begin
+  foreach t in array array['ordenes','orden_eventos','orden_pagos','orden_fotos'] loop
+    if not exists (select 1 from pg_publication_tables where pubname = 'supabase_realtime' and tablename = t) then
+      execute format('alter publication supabase_realtime add table public.%I', t);
+    end if;
+  end loop;
+end $$;
+
+-- Fotos en Supabase Storage (privado; solo los usuarios permitidos)
+do $$
+begin
+  if exists (select 1 from pg_namespace where nspname = 'storage') then
+    insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+    values ('ordenes', 'ordenes', false, 2097152, array['image/jpeg','image/webp','image/png'])
+    on conflict (id) do nothing;
+    execute 'drop policy if exists "ordenes leer" on storage.objects';
+    execute 'drop policy if exists "ordenes subir" on storage.objects';
+    execute 'drop policy if exists "ordenes borrar" on storage.objects';
+    execute $p$create policy "ordenes leer" on storage.objects for select to authenticated
+      using (bucket_id = 'ordenes' and (select public.es_permitido()))$p$;
+    execute $p$create policy "ordenes subir" on storage.objects for insert to authenticated
+      with check (bucket_id = 'ordenes' and (select public.es_permitido()))$p$;
+    execute $p$create policy "ordenes borrar" on storage.objects for delete to authenticated
+      using (bucket_id = 'ordenes' and (select public.es_permitido()))$p$;
+  end if;
+end $$;

@@ -425,7 +425,7 @@ function factura(f, abierta, onPDF, onBorrar) {
 
 const hora = new Intl.DateTimeFormat('es-CO', { hour: 'numeric', minute: '2-digit' });
 const dia = new Intl.DateTimeFormat('es-CO', { weekday: 'long', day: 'numeric', month: 'long' });
-const ICONOS = { agregar: '＋', quitar: '−', vaciar: '⟲', compra: '🛒', borrar_factura: '🗑️' };
+const ICONOS = { agregar: '＋', quitar: '−', vaciar: '⟲', compra: '🛒', borrar_factura: '🗑️', servicio: '🔧' };
 
 function nombreDia(fecha) {
   const hoy = new Date();

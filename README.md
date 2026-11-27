@@ -1,6 +1,6 @@
-# RH TECHNOLOGY · Faltantes
+# RH TECNOLOGY · Faltantes
 
-App web instalable (PWA) para la tienda **RH TECHNOLOGY** de Corozal, Sucre (celulares y accesorios).
+App web instalable (PWA) para la tienda **RH TECNOLOGY** de Corozal, Sucre (celulares y accesorios).
 Cualquiera del equipo dice lo que falta **escribiendo, con un audio o con una foto**, y la app lo guarda
 solo en la categoría correcta. Los jefes ven la misma lista **en tiempo real** desde sus iPhone y, cuando
 salen a comprar, usan el **Modo compras** para marcar lo que encontraron y lo que no.
@@ -21,8 +21,13 @@ salen a comprar, usan el **Modo compras** para marcar lo que encontraron y lo qu
 - **"Ya llegó…"** quita el producto, y **"ya se actualizó / ya se surtió todo"** vacía la lista
   (con un modal de confirmación propio).
 - **Tiempo real:** lo que agrega una persona aparece al instante en los demás celulares.
-- **Modo compras:** lista organizada para comprar, con **✓ Comprado** y **✗ No hay**. Lo comprado queda
-  como "🛒 Comprado" hasta que llega; lo que no se consiguió vuelve a la lista para la próxima vez.
+- **Modo compras:** lista compacta para comprar. Al tocar **✓ Comprado** o **✗ No hay** el producto sale y sube
+  el siguiente; lo marcado queda en *Ya revisados* (se puede deshacer) hasta **Terminar compra**.
+- **Servicio técnico:** repuestos (pantallas, tapas, tarjetas, cámaras, pines de carga, botones, baterías…).
+  "Tapa del Redmi 13C azul" → *Servicio técnico › Tapas › Redmi 13C · color azul*.
+- **Facturas de compra:** al terminar el Modo compras se guarda una factura **permanente** (la base de datos no
+  permite editarla ni borrarla) con fecha, quién compró, un apartado *Se compró* y otro *No se consiguió*,
+  por categoría. Se puede **descargar en PDF**. Lo comprado sale de la lista; lo que no había vuelve a ella.
 - **Respaldo sin IA:** si la IA falla, un clasificador por palabras clave entiende el texto.
 - **PWA:** se instala en iPhone y Android (la app muestra un botón "Instalar la app"), abre sin internet,
   recuerda la sesión y respeta el notch (safe-area).
@@ -58,8 +63,9 @@ salen a comprar, usan el **Modo compras** para marcar lo que encontraron y lo qu
 │   ├── supabase.js · auth.js   Cliente y login
 │   ├── ia.js                   Llama a la Edge Function
 │   ├── media.js                Grabar audio y preparar fotos
+│   ├── pdf.js                  PDF de las facturas (jsPDF, se carga solo al usarlo)
 │   └── config.example.js       Plantilla (config.js real NO se sube)
-├── icons/                      Iconos de la app
+├── icons/                      Logo (SVG y WebP) e iconos de la app
 ├── supabase/
 │   ├── schema.sql              Tablas, RLS, triggers y Realtime
 │   └── functions/procesar/     Edge Function con Gemini
@@ -194,10 +200,10 @@ La URL y la clave están en Supabase → **Project Settings → API Keys** (usa 
 | "Ya se surtió todo, solo falta forro lujo iPhone 14" | Pide confirmación, vacía y agrega el forro |
 | 📷 Foto de una caja | Identifica el producto y el modelo |
 
-**Modo compras:** en la pestaña *Todo*, toca **🛒 Modo compras**. Marca cada producto con **✓ Comprado** o
-**✗ No hay** (se puede deshacer). Al terminar toca **Terminar**: lo comprado queda como "🛒 Comprado" hasta
-que llegue a la tienda (ahí se toca **✓ Llegó**) y lo que no había vuelve a aparecer en la próxima compra con
-la nota "No se consiguió".
+**Modo compras:** en la pestaña *Todo*, toca **🛒 Modo compras**. Toca **✓ Comprado** o **✗ No hay** en cada
+producto (sale de la lista y sube el siguiente; se deshace en *Ya revisados*). Al final toca **Terminar compra**:
+se guarda la factura (botón **🧾** arriba) y se puede descargar en PDF. Si sales sin terminar, las marcas quedan
+guardadas en el celular.
 
 ## 🧪 Pruebas
 

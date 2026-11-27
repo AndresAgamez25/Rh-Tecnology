@@ -4,14 +4,14 @@
   <meta charset="utf-8">
   <!-- viewport-fit=cover permite usar toda la pantalla del iPhone (con notch) -->
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="description" content="Lista de productos faltantes de RH TECHNOLOGY, Corozal (Sucre).">
-  <meta name="theme-color" content="#0b0d12">
+  <meta name="description" content="Lista de productos faltantes de RH TECNOLOGY, Corozal (Sucre).">
+  <meta name="theme-color" content="#070d1c">
   <meta name="color-scheme" content="dark">
   <title>RH Faltantes</title>
 
   <!-- PWA: instalable en Android y en iPhone ("Agregar a pantalla de inicio") -->
   <link rel="manifest" href="manifest.json">
-  <link rel="icon" href="icons/icono.svg" type="image/svg+xml">
+  <link rel="icon" href="icons/logo-rh.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
@@ -24,14 +24,14 @@
 <body data-vista="cargando" data-modo="lista">
   <!-- ───────── Pantalla de carga ───────── -->
   <div class="vista vista-cargando" aria-label="Cargando">
-    <span class="marca-logo marca-logo-grande" aria-hidden="true">RH</span>
+    <img src="icons/logo.webp" alt="" class="cargando-logo" width="180" height="126">
   </div>
 
   <!-- ───────── Pantalla de login ───────── -->
   <section class="vista vista-login" aria-labelledby="login-titulo">
     <form id="form-login" class="login-caja" novalidate>
-      <span class="marca-logo marca-logo-grande" aria-hidden="true">RH</span>
-      <h1 id="login-titulo" class="login-titulo">RH TECHNOLOGY</h1>
+      <img src="icons/logo.webp" alt="" class="login-logo" width="216" height="152">
+      <h1 id="login-titulo" class="solo-lectores">RH TECNOLOGY</h1>
       <p class="login-sub">Lista de faltantes · Corozal, Sucre</p>
 
       <label class="campo">
@@ -54,18 +54,19 @@
   <!-- ───────── Encabezado (lista) ───────── -->
   <header class="encabezado encabezado-lista">
     <div class="marca">
-      <span class="marca-logo" aria-hidden="true">RH</span>
+      <img src="icons/logo-rh.svg" alt="" class="marca-img" width="46" height="29">
       <div>
-        <h1 class="marca-nombre">RH TECHNOLOGY</h1>
+        <h1 class="marca-nombre">RH <span class="marca-celeste">TECNOLOGY</span></h1>
         <p class="marca-sub">
           <span id="usuario-nombre">Corozal, Sucre</span>
           <button type="button" id="btn-salir" class="btn-enlace" hidden>· Salir</button>
         </p>
       </div>
     </div>
-    <button type="button" id="btn-reiniciar" class="btn btn-peligro-suave">
-      Reiniciar lista
-    </button>
+    <div class="encabezado-acciones">
+      <button type="button" id="btn-facturas" class="btn-icono btn-facturas" aria-label="Facturas de compras" title="Facturas de compras">🧾</button>
+      <button type="button" id="btn-reiniciar" class="btn btn-peligro-suave">Reiniciar lista</button>
+    </div>
   </header>
 
   <!-- ───────── Encabezado (modo compras) ───────── -->
@@ -74,8 +75,17 @@
       <h1 class="marca-nombre">🛒 Modo compras</h1>
       <p class="marca-sub" id="compras-progreso" aria-live="polite"></p>
     </div>
-    <button type="button" id="btn-terminar" class="btn btn-principal">Terminar</button>
+    <button type="button" id="btn-salir-compras" class="btn btn-secundario">Salir</button>
     <div class="progreso" aria-hidden="true"><div class="progreso-barra" id="compras-barra"></div></div>
+  </header>
+
+  <!-- ───────── Encabezado (facturas) ───────── -->
+  <header class="encabezado encabezado-facturas">
+    <div class="compras-titulo">
+      <h1 class="marca-nombre">🧾 Facturas de compras</h1>
+      <p class="marca-sub">Historial de cada salida de compras</p>
+    </div>
+    <button type="button" id="btn-volver" class="btn btn-secundario">Volver</button>
   </header>
 
   <!-- ───────── Pestañas de categorías (se llenan desde JS) ───────── -->
@@ -112,8 +122,8 @@
 
   <!-- ───────── Barra inferior del Modo compras ───────── -->
   <div class="barra-compras">
-    <span id="compras-sin-guardar" class="barra-compras-texto" aria-live="polite"></span>
-    <button type="button" id="btn-guardar-compras" class="btn btn-exito" disabled>Guardar cambios</button>
+    <span id="compras-resumen" class="barra-compras-texto" aria-live="polite"></span>
+    <button type="button" id="btn-terminar-compra" class="btn btn-exito">Terminar compra</button>
   </div>
 
   <!-- ───────── Modal de confirmación propio (no usamos confirm()) ───────── -->

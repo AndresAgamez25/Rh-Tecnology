@@ -19,13 +19,15 @@ export function normalizar(texto) {
 
 const PALABRAS_CATEGORIA = {
   celulares: /\b(celular(es)?|telefonos?|smartphones?|equipos?)\b/,
-  forros: /\b(forros?|fundas?|cases?|estuches?|carcasas?)\b/,
-  vidrios: /\b(vidrios?|micas?|templados?|cristal(es)?|protector(es)?\s+de\s+pantalla)\b/,
+  // Repuestos de servicio técnico ("tarjeta de memoria" NO es repuesto: va a Otros)
+  servicio: /\b(tapas?(\s+traseras?)?|pantallas?|displays?|visor(es)?|lcd|oled|modulos?|tactil(es)?|touch|tarjetas?(?!\s+(de\s+)?(memoria|sd|micro|sim))|placas?|boards?|camaras?|lentes?|pin(es)?|puertos?\s+de\s+carga|centros?\s+de\s+carga|conector(es)?\s+de\s+carga|botones|boton|baterias?|pilas?|microfonos?|altavoz|altavoces|bandejas?(\s+(de\s+)?sim)?|flex|marcos?|chasis|repuestos?)\b/,
+  forros: /\b(forros?|fundas?|cases?|covers?|estuches?|carcasas?)\b/,
+  vidrios: /\b(vidrios?|vidreos?|micas?|templados?|cristal(es)?|glass|hidrogel|protector(es)?\s+(de\s+)?(pantalla|camara|lente)s?)\b/,
   cables: /\b(cables?|usb|lightning|tipo\s*-?\s*c|micro\s*-?\s*usb|v8)\b/,
   cargadores: /\b(cargador(es)?|cubos?|cabezotes?|adaptador(es)?)\b/,
-  audifonos: /\b(audifonos?|auriculares?|airpods?|buds|manos\s+libres|diademas?|bluetooth|tws)\b/,
+  audifonos: /\b(audifonos?|auriculares?|airpods?|buds|earbuds|manos\s+libres|diademas?|cascos|headsets?|bluetooth|tws)\b/,
   // Pistas de "Otros": si aparecen primero, ganan.
-  otros: /\b(memorias?|micro\s*sd|mouse|ratones?|soportes?|parlantes?|bafles?|teclados?|popsockets?|tripodes?|aros?\s+de\s+luz|relojes?|smartwatch\w*|pendrives?|lapiz|stylus|baterias?|power\s*banks?)\b/,
+  otros: /\b(memorias?|micro\s*sd|tarjetas?\s+(de\s+)?(memoria|sd|micro\s*sd|sim)|mouse|ratones?|soportes?|parlantes?|bafles?|teclados?|popsockets?|tripodes?|aros?\s+de\s+luz|relojes?|smartwatch\w*|pendrives?|lapiz|stylus|power\s*banks?|bancos?\s+de\s+(carga|poder))\b/,
 };
 
 // Marcas de celulares (también sirven para reconocer un celular sin la palabra "celular")
@@ -45,19 +47,32 @@ const RE_MARCA = /\b(samsung|galaxy|xiaomi|redmi|motorola|iphone|tecno|infinix|o
 
 const PALABRAS_SUBTIPO = {
   celulares: MARCAS_CELULAR,
+  // El orden importa: "flex de carga" es pin antes que "flex" (otros)
+  servicio: {
+    pines: /\b(pin(es)?|puertos?|centros?|conector(es)?|placas?|tarjetas?|flex)\s+de\s+carga\b|\bpin(es)?\b/,
+    pantallas: /\b(pantallas?|displays?|visor(es)?|lcd|oled|modulos?|tactil(es)?|touch)\b/,
+    tapas: /\b(tapas?(\s+traseras?)?|chasis)\b/,
+    tarjetas: /\b(tarjetas?|placas?|boards?)\b/,
+    camaras: /\b(camaras?|lentes?)\b/,
+    botones: /\b(botones|boton)\b/,
+    baterias: /\b(baterias?|pilas?)\b/,
+    otros: /\b(microfonos?|altavoz|altavoces|bandejas?|flex|marcos?|repuestos?)\b/,
+  },
   forros: {
-    silicona: /\bsilicon[ae]?s?\b/,
-    lujo: /\b(lujo|lujos[oa]s?|premium|elegantes?)\b/,
+    silicona: /\b(silicon[ae]?s?|siliconad[oa]s?|soft)\b/,
+    lujo: /\b(lujo|lujos[oa]s?|premium|elegantes?|cuero)\b/,
   },
   vidrios: {
+    // Protector de los "ojitos" de la cámara (no es vidrio de pantalla)
+    camara: /\bprotector(es)?\s+(de\s+)?(camara|lente)s?\b/,
     blindado: /\bblindad[oa]s?\b/,
     titanio: /\btitanio\b/,
-    antiespia: /\b(anti\s*-?\s*espias?|privacidad|privad[oa]s?)\b/,
-    curvo: /\b(curv[oa]s?|curvad[oa]s?)\b/,
-    sencillo: /\b(sencill[oa]s?|normal(es)?|basic[oa]s?)\b/,
+    antiespia: /\b(anti\s*-?\s*espias?|privacidad|privacy|privad[oa]s?)\b/,
+    curvo: /\b(curv[oa]s?|curvad[oa]s?|curved?)\b/,
+    sencillo: /\b(sencill[oa]s?|normal(es)?|basic[oa]s?|clear)\b/,
   },
   audifonos: {
-    inalambricos: /\b(inalambric[oa]s?|bluetooth|airpods?|buds|tws)\b/,
+    inalambricos: /\b(inalambric[oa]s?|bluetooth|airpods?|buds|earbuds|tws)\b/,
     cable: /\b((de|con)\s+cable|alambric[oa]s?|cablead[oa]s?|jack)\b/,
   },
 };
@@ -76,7 +91,7 @@ const DETALLES = [
 const RE_VACIAR = /\b(ya\s+se\s+(actualizo|surtio|surtieron|repuso|lleno)(\s+todo)?|ya\s+(llego|se\s+compro)\s+todo|ya\s+se\s+actualizo\s+la\s+lista|borr(ar|a|e|en)\s+todo|vaci(ar|a|e|en)\s+(la\s+)?lista|reinici(ar|a|e|en)\s+(la\s+)?lista|lista\s+(nueva|limpia))\b/g;
 
 // Marcadores de inicio de frase
-const AGREGAR = String.raw`no\s+hay|ya\s+no\s+hay|tampoco\s+hay|faltan?|hace[n]?\s+falta|se\s+acab(o|aron)|se\s+agot(o|aron)|agotad[oa]s?|necesitamos|hay\s+que\s+pedir`;
+const AGREGAR = String.raw`no\s+hay|ya\s+no\s+hay|tampoco\s+hay|faltan?|hace[n]?\s+falta|se\s+acab(o|aron)|se\s+agot(o|aron)|agotad[oa]s?|necesitamos|se\s+necesitan?|necesitan?|se\s+requieren?|requerimos|hay\s+que\s+pedir|pedir`;
 const QUITAR = String.raw`llegaron|llego|se\s+compr(o|aron)|compramos|ya\s+hay|ya\s+tenemos|ya\s+surtimos|ya\s+se\s+surtio`;
 
 const RE_AGREGAR = new RegExp(`\\b(${AGREGAR})\\b`);
@@ -88,7 +103,7 @@ const RE_QUEDAN = /,?\s*\b(?:(?:solo|solamente|nada\s+mas)\s+)?(?:quedan?|hay\s+
 // Palabras de relleno que no forman parte del modelo
 const RELLENO = new Set(('de del para el la los las lo un una unos unas en con que hay no ya ' +
   'tambien mas y e ni o al por pero color colores tampoco se nos ningun ninguna nada ' +
-  'pantalla celular telefono favor porfa unidad unidades hace hacen').split(' '));
+  'pantalla celular telefono favor porfa unidad unidades hace hacen protector protectores').split(' '));
 
 // Formato bonito de marcas y palabras comunes de modelos
 const FORMATO = {
@@ -98,7 +113,8 @@ const FORMATO = {
   huawei: 'Huawei', oppo: 'Oppo', realme: 'Realme', vivo: 'Vivo', zte: 'ZTE', blade: 'Blade',
   nokia: 'Nokia', alcatel: 'Alcatel', pro: 'Pro', max: 'Max', plus: 'Plus', ultra: 'Ultra',
   lite: 'Lite', mini: 'Mini', note: 'Note', se: 'SE', fe: 'FE', jbl: 'JBL', apple: 'Apple',
-  sd: 'SD', usb: 'USB', gb: 'GB', tb: 'TB',
+  sd: 'SD', usb: 'USB', gb: 'GB', tb: 'TB', xr: 'XR', xs: 'XS', gt: 'GT', nfc: 'NFC', neo: 'Neo',
+  edge: 'Edge', play: 'Play', power: 'Power', lte: 'LTE',
 };
 
 // ── Utilidades ───────────────────────────────────────────────
@@ -138,11 +154,20 @@ const DETALLES_CELULAR = [
   [/\bde\s+(32|64|128|256|512)\b/g, (m) => `${m[1]} GB`],
 ];
 
+// Servicio técnico: el color del repuesto es parte de lo que se necesita
+const COLORES = 'negr[oa]s?|azul(es)?|blanc[oa]s?|roj[oa]s?|verdes?|dorad[oa]s?|plateado|plata|gris(es)?|morad[oa]s?|rosad[oa]s?|rosa|lila|celeste|amarill[oa]s?|naranja|grafito|beige|cafe';
+const DETALLES_SERVICIO = [
+  [new RegExp(`\\bcolor\\s+(${COLORES})\\b`, 'g'), (m) => `color ${m[1]}`],
+  [new RegExp(`\\b(${COLORES})\\b`, 'g'), (m) => `color ${m[1]}`],
+];
+
 /** Saca los detalles técnicos y devuelve {resto, detalles[]} */
 function extraerDetalles(texto, categoria = null) {
   const encontrados = [];
   let resto = texto;
-  const lista = categoria === 'celulares' ? DETALLES_CELULAR : DETALLES;
+  const lista = categoria === 'celulares' ? DETALLES_CELULAR
+    : categoria === 'servicio' ? DETALLES_SERVICIO
+    : DETALLES;
   for (const [re, formato] of lista) {
     resto = resto.replace(re, (...args) => {
       for (const valor of [formato(args)].flat()) {
@@ -223,6 +248,7 @@ function construirItem(frase, quedan, anterior) {
   if (!categoria && RE_MARCA.test(frase)) categoria = 'celulares';
   categoria ??= 'otros';
   if (categoria === 'celulares') subtipo = detectarSubtipo('celulares', frase) ?? 'otras';
+  if (categoria === 'servicio') subtipo ??= 'otros';
 
   const { resto, detalles } = extraerDetalles(frase, categoria);
   const modelo = palabrasModelo(resto, categoria).map(formatearPalabra).join(' ');

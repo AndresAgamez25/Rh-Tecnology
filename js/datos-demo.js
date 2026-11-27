@@ -22,6 +22,9 @@ function semilla() {
   return [
     { categoria: 'celulares', subtipo: 'xiaomi', modelo: 'Redmi 13C', detalle: '128 GB · 6 GB RAM', quedan: 'solo negro', creado_por: 'Patricia', creado_en: haceMinutos(20) },
     { categoria: 'celulares', subtipo: 'samsung', modelo: 'Samsung Galaxy A15', detalle: '128 GB · 4 GB RAM', quedan: '', creado_por: 'Osman', creado_en: haceMinutos(140) },
+    { categoria: 'servicio', subtipo: 'tapas', modelo: 'Redmi 13C', detalle: 'color azul', quedan: '', creado_por: 'Osman', creado_en: haceMinutos(70) },
+    { categoria: 'servicio', subtipo: 'pantallas', modelo: 'iPhone 11', detalle: '', quedan: '', creado_por: 'Tú', creado_en: haceMinutos(15) },
+    { categoria: 'vidrios', subtipo: 'camara', modelo: 'iPhone 15 Pro', detalle: '', quedan: '', creado_por: 'Patricia', creado_en: haceMinutos(8) },
     { categoria: 'forros', subtipo: 'silicona', modelo: 'Redmi A7 Pro', detalle: '', quedan: 'azul y negro', creado_por: 'Jefe 1', creado_en: haceMinutos(12) },
     { categoria: 'forros', subtipo: 'lujo', modelo: 'iPhone 15 Pro Max', detalle: 'con MagSafe', quedan: '', creado_por: 'Tú', creado_en: haceMinutos(95) },
     { categoria: 'vidrios', subtipo: 'blindado', modelo: 'Galaxy A15', detalle: '', quedan: '', creado_por: 'Tú', creado_en: haceMinutos(30) },
@@ -98,6 +101,42 @@ export async function actualizarEstado(ids, estado, autor = 'Tú') {
   cambiar(items.map((it) => (cuales.has(it.id) && it.estado !== estado
     ? { ...it, estado, estado_por: autor, estado_en: ahora }
     : it)));
+}
+
+// ── Facturas de compra (modo demo: en el navegador) ─────────
+const CLAVE_COMPRAS = 'rh-compras-demo';
+
+function leerFacturas() {
+  try { return JSON.parse(localStorage.getItem(CLAVE_COMPRAS) || '[]'); } catch { return []; }
+}
+
+export async function listarCompras() {
+  return leerFacturas();
+}
+
+/** Guarda la factura, quita lo comprado y deja lo no conseguido marcado. */
+export async function cerrarCompra(comprados, noConseguidos, autor = 'Tú') {
+  const si = new Set(comprados);
+  const no = new Set(noConseguidos);
+  const revisados = items.filter((it) => si.has(it.id) || no.has(it.id));
+  if (!revisados.length) throw new Error('No hay productos revisados para guardar');
+  const ahora = new Date().toISOString();
+  const factura = {
+    id: nuevoId(),
+    creada_en: ahora,
+    hecha_por: autor,
+    items: revisados
+      .map(({ categoria, subtipo, modelo, detalle, quedan, creado_por, id }) =>
+        ({ categoria, subtipo, modelo, detalle, quedan, creado_por, resultado: si.has(id) ? 'comprado' : 'no_conseguido' }))
+      .sort((a, b) => (a.resultado === 'comprado' ? 0 : 1) - (b.resultado === 'comprado' ? 0 : 1)),
+    total_comprados: revisados.filter((it) => si.has(it.id)).length,
+    total_no_conseguidos: revisados.filter((it) => !si.has(it.id)).length,
+  };
+  try { localStorage.setItem(CLAVE_COMPRAS, JSON.stringify([factura, ...leerFacturas()].slice(0, 100))); } catch { /* sin almacenamiento */ }
+  cambiar(items
+    .filter((it) => !si.has(it.id))
+    .map((it) => (no.has(it.id) ? { ...it, estado: 'no_conseguido', estado_por: autor, estado_en: ahora } : it)));
+  return factura;
 }
 
 export async function vaciar() {

@@ -136,3 +136,51 @@ test('"de 128" sin decir gigas = 128 GB', () => {
   const [c] = agregados(clasificar('no hay iPhone 13 de 128'));
   assert.deepEqual([c.categoria, c.subtipo, c.modelo, c.detalle], ['celulares', 'apple', 'iPhone 13', '128 GB']);
 });
+
+// ── Servicio técnico y vocabulario ───────────────────────────
+
+const uno = (texto) => { const [a] = agregados(clasificar(texto)); return [a.categoria, a.subtipo, a.modelo, a.detalle]; };
+
+test('servicio técnico: tapa con color', () => {
+  assert.deepEqual(uno('se necesita tapa del Redmi 13C color azul'), ['servicio', 'tapas', 'Redmi 13C', 'color azul']);
+  assert.deepEqual(uno('falta tapa trasera Samsung A15 negra'), ['servicio', 'tapas', 'Samsung A15', 'color negra']);
+});
+
+test('servicio técnico: pantalla, tarjeta, cámara, pin, botones, batería', () => {
+  assert.deepEqual(uno('no hay pantalla del iPhone 11').slice(0, 3), ['servicio', 'pantallas', 'iPhone 11']);
+  assert.deepEqual(uno('falta display Redmi Note 12').slice(0, 3), ['servicio', 'pantallas', 'Redmi Note 12']);
+  assert.deepEqual(uno('se necesita tarjeta madre del Moto G24').slice(0, 2), ['servicio', 'tarjetas']);
+  assert.deepEqual(uno('falta camara trasera del A54').slice(0, 2), ['servicio', 'camaras']);
+  assert.deepEqual(uno('no hay pin de carga tipo c del Redmi 9').slice(0, 2), ['servicio', 'pines']);
+  assert.deepEqual(uno('falta flex de botones Samsung A10').slice(0, 2), ['servicio', 'botones']);
+  assert.deepEqual(uno('no hay bateria del iPhone XR').slice(0, 3), ['servicio', 'baterias', 'iPhone XR']);
+});
+
+test('tarjeta de memoria NO es servicio técnico', () => {
+  assert.equal(uno('no hay tarjeta de memoria de 64')[0], 'otros');
+});
+
+test('protector de cámara: grupo propio en vidrios (no es repuesto)', () => {
+  assert.deepEqual(uno('no hay protector de camara del iPhone 15').slice(0, 3), ['vidrios', 'camara', 'iPhone 15']);
+  assert.deepEqual(uno('falta protector de lente iPhone 16 Pro').slice(0, 2), ['vidrios', 'camara']);
+  assert.deepEqual(uno('no hay vidrio blindado iPhone 15').slice(0, 2), ['vidrios', 'blindado']);
+  assert.deepEqual(uno('falta camara trasera del iPhone 15').slice(0, 2), ['servicio', 'camaras']);
+});
+
+test('tarjeta SIM va a Otros', () => {
+  assert.equal(uno('no hay tarjeta sim')[0], 'otros');
+});
+
+test('vocabulario de forros: silicon, funda, case, de lujo', () => {
+  assert.deepEqual(uno('no hay forro silicon A15').slice(0, 2), ['forros', 'silicona']);
+  assert.deepEqual(uno('falta funda silicone Redmi 13C').slice(0, 2), ['forros', 'silicona']);
+  assert.deepEqual(uno('no hay case de lujo iPhone 14').slice(0, 2), ['forros', 'lujo']);
+  assert.deepEqual(uno('falta estuche de cuero S23').slice(0, 2), ['forros', 'lujo']);
+});
+
+test('vocabulario de vidrios y audífonos', () => {
+  assert.deepEqual(uno('no hay glass privacy iPhone 13').slice(0, 2), ['vidrios', 'antiespia']);
+  assert.deepEqual(uno('falta hidrogel del A05')[0], 'vidrios');
+  assert.deepEqual(uno('no hay earbuds').slice(0, 2), ['audifonos', 'inalambricos']);
+  assert.deepEqual(uno('se acabaron los cascos de cable').slice(0, 2), ['audifonos', 'cable']);
+});

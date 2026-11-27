@@ -53,6 +53,13 @@ export function actualizarPestanas(contenedor, items, activa) {
     const id = boton.dataset.id;
     const n = id === 'todo' ? items.length : items.filter((it) => it.categoria === id).length;
     const contador = boton.querySelector('.contador');
+    // Si el número cambió (alguien agregó o quitó algo), el contador "salta"
+    if (contador.dataset.listo && contador.textContent !== String(n)) {
+      contador.classList.remove('pop');
+      void contador.offsetWidth; // reinicia la animación
+      contador.classList.add('pop');
+    }
+    contador.dataset.listo = '1';
     contador.textContent = String(n);
     contador.classList.toggle('vacio', n === 0);
     const seleccionada = id === activa;
@@ -152,15 +159,24 @@ function gruposPorSubtipo(categoria, items, crearTarjeta) {
   return nodos;
 }
 
-/** Una sección por categoría (vista "Todo" y Modo compras). */
-function seccionesPorCategoria(items, crearTarjeta, nivel = 'h2') {
+/**
+ * Una sección por categoría (vista "Todo" y Modo compras).
+ * agrupar=false: sin títulos de subtipo (más compacto); se ordena por subtipo.
+ */
+function seccionesPorCategoria(items, crearTarjeta, { agrupar = true } = {}) {
   return CATEGORIAS
     .map((cat) => ({ cat, delCat: items.filter((it) => categoriaPorId(it.categoria).id === cat.id) }))
     .filter(({ delCat }) => delCat.length)
-    .map(({ cat, delCat }) => el('section', { class: 'seccion' },
-      el(nivel, { class: 'seccion-titulo' }, cat.nombre, el('span', { class: 'contador', text: String(delCat.length) })),
-      ...gruposPorSubtipo(cat, delCat, crearTarjeta),
-    ));
+    .map(({ cat, delCat }) => {
+      const orden = cat.subtipos.map((s) => s.id);
+      const posicion = (it) => (orden.includes(it.subtipo) ? orden.indexOf(it.subtipo) : orden.length);
+      return el('section', { class: 'seccion' },
+        el('h2', { class: 'seccion-titulo' }, cat.nombre, el('span', { class: 'contador', text: String(delCat.length) })),
+        ...(agrupar
+          ? gruposPorSubtipo(cat, delCat, crearTarjeta)
+          : [el('ul', { class: 'tarjetas' }, ...[...delCat].sort((a, b) => posicion(a) - posicion(b)).map(crearTarjeta))]),
+      );
+    });
 }
 
 function estadoVacio(activa) {
@@ -222,8 +238,9 @@ export function dibujarLista(contenedor, items, activa, { onLlego, onCompras, in
 }
 
 // ── Modo compras ─────────────────────────────────────────────
-// Las marcas (Comprado / No hay) quedan en un BORRADOR en el celular y
-// solo se guardan en la base al tocar "Guardar cambios".
+// Al marcar un producto sale de la vista y sube el siguiente. Las marcas
+// viven en un BORRADOR hasta "Terminar compra"; los ya marcados se ven
+// (y se pueden deshacer) en "Ya revisados", al final.
 
 /**
  * Estado GUARDADO de un producto para esta salida de compras.
@@ -245,32 +262,57 @@ export function resumenCompras(items, inicio, borrador = {}) {
   return r;
 }
 
-function tarjetaCompra(item, { actual, sinGuardar, noHabiaAntes }, onMarcar) {
-  const clases = ['tarjeta-compra', actual === 'comprado' && 'marca-comprado',
-    actual === 'no_conseguido' && 'marca-no-hay', sinGuardar && 'sin-guardar'].filter(Boolean).join(' ');
+/** Subtipo para mostrar en pequeño (en celulares no: la marca ya va en el modelo). */
+function subtipoCorto(item) {
+  return item.categoria === 'celulares' ? null : nombreSubtipo(item.categoria, item.subtipo);
+}
+
+/** Texto corto "subtipo · detalle · quedan" para filas compactas. */
+function lineaDetalle(item) {
+  return [subtipoCorto(item), item.modelo ? item.detalle : '', item.quedan && `quedan ${item.quedan}`]
+    .filter(Boolean).join(' · ');
+}
+
+function tarjetaCompra(item, onMarcar) {
   const titulo = tituloDe(item);
-  return el('li', { class: claseTarjeta(item, clases), 'data-id': item.id },
-    infoTarjeta(item, { mostrarEstado: false }),
-    noHabiaAntes ? el('span', { class: 'etiqueta etiqueta-no-hay', text: '✗ La vez pasada no se consiguió' }) : null,
-    sinGuardar ? el('span', { class: 'etiqueta etiqueta-sin-guardar', text: '● Sin guardar' }) : null,
+  // Sin títulos de grupo: la marca/tipo va dentro de la tarjeta, en pequeño
+  const detalle = [subtipoCorto(item), item.modelo ? item.detalle : ''].filter(Boolean).join(' · ');
+  const nodo = el('li', { class: claseTarjeta(item, 'tarjeta-compra'), 'data-id': item.id },
+    el('div', { class: 'tarjeta-info' },
+      el('h4', { class: 'tarjeta-modelo', text: titulo }),
+      detalle ? el('p', { class: 'tarjeta-detalle', text: detalle }) : null,
+      item.quedan ? el('span', { class: 'etiqueta etiqueta-quedan', text: `Quedan: ${item.quedan}` }) : null,
+      item.estado === 'no_conseguido' ? el('span', { class: 'etiqueta etiqueta-no-hay', text: '✗ La vez pasada no había' }) : null,
+    ),
     el('div', { class: 'botones-compra' },
       el('button', {
         type: 'button', class: 'btn-comprado',
-        'aria-pressed': String(actual === 'comprado'),
-        'aria-label': `${titulo}: comprado${actual === 'comprado' ? ' (toca para desmarcar)' : ''}`,
-        onclick: () => onMarcar(item, 'comprado'),
-      }, '✓ Comprado'),
+        'aria-label': `${titulo}: comprado`,
+        onclick: () => onMarcar(item, 'comprado', nodo),
+      }, el('span', { 'aria-hidden': 'true', text: '✓' }), 'Comprado'),
       el('button', {
         type: 'button', class: 'btn-no-hay',
-        'aria-pressed': String(actual === 'no_conseguido'),
-        'aria-label': `${titulo}: no hay${actual === 'no_conseguido' ? ' (toca para desmarcar)' : ''}`,
-        onclick: () => onMarcar(item, 'no_conseguido'),
-      }, '✗ No hay'),
+        'aria-label': `${titulo}: no hay`,
+        onclick: () => onMarcar(item, 'no_conseguido', nodo),
+      }, el('span', { 'aria-hidden': 'true', text: '✗' }), 'No hay'),
     ),
+  );
+  return nodo;
+}
+
+function filaRevisada(item, marca, onDeshacer) {
+  const comprado = marca === 'comprado';
+  return el('li', { class: `fila-revisada ${comprado ? 'es-comprado' : 'es-no-hay'}` },
+    el('span', { class: 'fila-icono', 'aria-label': comprado ? 'Comprado' : 'No hay', text: comprado ? '✓' : '✗' }),
+    el('span', { class: 'fila-texto' },
+      el('strong', { text: tituloDe(item) }),
+      lineaDetalle(item) ? el('small', { text: lineaDetalle(item) }) : null,
+    ),
+    el('button', { type: 'button', class: 'btn-deshacer', 'aria-label': `Deshacer ${tituloDe(item)}`, onclick: () => onDeshacer(item) }, 'Deshacer'),
   );
 }
 
-export function dibujarCompras(contenedor, items, inicio, { borrador, onMarcar }) {
+export function dibujarCompras(contenedor, items, inicio, { borrador, onMarcar, onDeshacer }) {
   marcarPrimerDibujo(items);
   if (!items.length) {
     contenedor.replaceChildren(el('div', { class: 'vacio-estado vacio-compras' },
@@ -280,16 +322,123 @@ export function dibujarCompras(contenedor, items, inicio, { borrador, onMarcar }
     ));
     return;
   }
-  const crear = (it) => {
-    const guardado = estadoGuardado(it, inicio);
-    const actual = borrador[it.id] ?? guardado;
-    return tarjetaCompra(it, {
-      actual,
-      sinGuardar: it.id in borrador,
-      noHabiaAntes: it.estado === 'no_conseguido' && guardado === 'pendiente',
-    }, onMarcar);
-  };
-  contenedor.replaceChildren(...seccionesPorCategoria(items, crear));
+  const marca = (it) => borrador[it.id] ?? estadoGuardado(it, inicio);
+  const pendientes = items.filter((it) => marca(it) === 'pendiente');
+  // Ya revisados: primero lo comprado, luego lo que no había
+  const revisados = items.filter((it) => marca(it) !== 'pendiente')
+    .sort((a, b) => (marca(a) === 'comprado' ? 0 : 1) - (marca(b) === 'comprado' ? 0 : 1));
+
+  const nodos = pendientes.length
+    ? seccionesPorCategoria(pendientes, (it) => tarjetaCompra(it, onMarcar), { agrupar: false })
+    : [el('div', { class: 'vacio-estado vacio-compras' },
+        el('div', { class: 'vacio-icono', 'aria-hidden': 'true', text: '✅' }),
+        el('h2', { class: 'vacio-titulo', text: '¡Revisaste todo!' }),
+        el('p', { class: 'vacio-texto', text: 'Toca "Terminar compra" abajo para guardar la factura.' }),
+      )];
+
+  if (revisados.length) {
+    const comprados = revisados.filter((it) => marca(it) === 'comprado').length;
+    nodos.push(el('details', { class: 'revisados', open: pendientes.length === 0 },
+      el('summary', {},
+        `Ya revisados (${revisados.length})`,
+        el('span', { class: 'revisados-conteo', text: `✓ ${comprados} · ✗ ${revisados.length - comprados}` }),
+      ),
+      el('ul', { class: 'filas' }, ...revisados.map((it) => filaRevisada(it, marca(it), onDeshacer))),
+    ));
+  }
+  contenedor.replaceChildren(...nodos);
+}
+
+// ── Facturas ─────────────────────────────────────────────────
+
+const fechaLarga = new Intl.DateTimeFormat('es-CO', {
+  weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', hour: 'numeric', minute: '2-digit',
+});
+
+function filaFactura(item) {
+  const comprado = item.resultado === 'comprado';
+  return el('li', { class: `fila-revisada ${comprado ? 'es-comprado' : 'es-no-hay'}` },
+    el('span', { class: 'fila-icono', 'aria-label': comprado ? 'Se compró' : 'No se consiguió', text: comprado ? '✓' : '✗' }),
+    el('span', { class: 'fila-texto' },
+      el('strong', { text: tituloDe(item) }),
+      lineaDetalle(item) ? el('small', { text: lineaDetalle(item) }) : null,
+    ),
+    el('span', { class: 'fila-resultado', text: comprado ? 'Comprado' : 'No había' }),
+  );
+}
+
+/** Apartado de la factura ("Se compró" o "No se consiguió"), por categoría. */
+function apartadoFactura(items, resultado) {
+  const lista = items.filter((it) => it.resultado === resultado);
+  if (!lista.length) return null;
+  const comprado = resultado === 'comprado';
+  return el('section', { class: `factura-apartado ${comprado ? 'apartado-comprado' : 'apartado-no-hay'}` },
+    el('h3', { class: 'apartado-titulo' },
+      comprado ? '✓ Se compró' : '✗ No se consiguió',
+      el('span', { class: 'contador', text: String(lista.length) }),
+      comprado ? null : el('small', { text: 'vuelve a la lista' }),
+    ),
+    ...CATEGORIAS
+      .map((cat) => ({ cat, del: lista.filter((it) => categoriaPorId(it.categoria).id === cat.id) }))
+      .filter(({ del }) => del.length)
+      .map(({ cat, del }) => el('div', { class: 'factura-seccion' },
+        el('h4', { class: 'grupo-titulo', text: cat.nombre }),
+        el('ul', { class: 'filas' }, ...del.map(filaFactura)),
+      )),
+  );
+}
+
+function factura(f, abierta, onPDF) {
+  const items = Array.isArray(f.items) ? f.items : [];
+  const botonPDF = el('button', {
+    type: 'button', class: 'btn btn-pdf',
+    onclick: async (e) => {
+      const b = e.currentTarget;
+      b.disabled = true;
+      b.textContent = 'Generando PDF…';
+      try { await onPDF(f); } finally { b.disabled = false; b.textContent = '📄 Descargar PDF'; }
+    },
+  }, '📄 Descargar PDF');
+  return el('details', { class: 'factura', open: abierta, 'data-id': f.id },
+    el('summary', {},
+      el('span', { class: 'factura-titulo' },
+        el('strong', { text: fechaLarga.format(new Date(f.creada_en)) }),
+        el('small', { text: `Compró: ${f.hecha_por}` }),
+      ),
+      el('span', { class: 'factura-totales' },
+        el('span', { class: 'total-comprado', text: `✓ ${f.total_comprados}` }),
+        el('span', { class: 'total-no-hay', text: `✗ ${f.total_no_conseguidos}` }),
+      ),
+    ),
+    el('div', { class: 'factura-cuerpo' },
+      apartadoFactura(items, 'comprado'),
+      apartadoFactura(items, 'no_conseguido'),
+      el('div', { class: 'factura-acciones' }, botonPDF),
+    ),
+  );
+}
+
+export function dibujarFacturas(contenedor, facturas, { abierta, nueva, onPDF }) {
+  if (facturas === null) {
+    contenedor.replaceChildren(el('p', { class: 'cargando-texto', text: 'Cargando facturas…' }));
+    return;
+  }
+  if (!facturas.length) {
+    contenedor.replaceChildren(el('div', { class: 'vacio-estado' },
+      el('div', { class: 'vacio-icono', 'aria-hidden': 'true', text: '🧾' }),
+      el('h2', { class: 'vacio-titulo', text: 'Aún no hay facturas' }),
+      el('p', { class: 'vacio-texto', text: 'Se crean solas al tocar "Terminar compra" en el Modo compras.' }),
+    ));
+    return;
+  }
+  const nodos = facturas.map((f) => factura(f, f.id === abierta, onPDF));
+  // Factura recién creada: animación de "guardado"
+  if (nueva) {
+    const n = nodos.find((d) => d.dataset.id === nueva);
+    n?.classList.add('factura-nueva');
+    n?.prepend(el('div', { class: 'sello-guardado', 'aria-hidden': 'true' }, el('span', { text: '✓' }), 'Factura guardada'));
+  }
+  contenedor.replaceChildren(...nodos);
 }
 
 // ── Modal de confirmación ────────────────────────────────────

@@ -6,14 +6,18 @@
 
 /* 1. Variables de diseño (tokens) ------------------------------ */
 :root {
-  --fondo: #0b0d12;
-  --superficie: #141821;
-  --superficie-2: #1c2230;
-  --borde: #262d3d;
-  --texto: #e9edf5;
-  --texto-suave: #8f98ad;
-  --acento: #3d8bfd;
-  --acento-texto: #ffffff;
+  /* Colores del logo RH TECNOLOGY: azul #2152B0 y celeste #1EB4EA */
+  --marca-azul: #2152b0;
+  --marca-celeste: #1eb4ea;
+  --degradado: linear-gradient(135deg, #2a63d4 0%, #1eb4ea 100%);
+  --fondo: #070d1c;
+  --superficie: #0f1a33;
+  --superficie-2: #172649;
+  --borde: #22345e;
+  --texto: #eaf2ff;
+  --texto-suave: #8ea4cc;
+  --acento: #1eb4ea;
+  --acento-texto: #04121f;
   --exito: #34d399;
   --peligro: #f87171;
   --aviso-fondo: #3a2e12;
@@ -128,7 +132,7 @@ body[data-vista="app"] .vista-app { display: block; }
            calc(var(--margen-x) + var(--seguro-der))
            10px
            calc(var(--margen-x) + var(--seguro-izq));
-  background: rgb(11 13 18 / 0.88);
+  background: rgb(7 13 28 / 0.88);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
 }
@@ -185,7 +189,7 @@ body[data-vista="app"] .vista-app { display: block; }
   gap: 8px;
   overflow-x: auto;
   padding: 6px calc(var(--margen-x) + var(--seguro-der)) 10px calc(var(--margen-x) + var(--seguro-izq));
-  background: rgb(11 13 18 / 0.88);
+  background: rgb(7 13 28 / 0.88);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
   scrollbar-width: none;
@@ -329,9 +333,9 @@ body[data-vista="app"] .vista-app { display: block; }
   width: 100%;
   margin-top: 12px;
   padding: 12px 16px;
-  border: 1px solid rgb(61 139 253 / 0.45);
+  border: 1px solid rgb(30 180 234 / 0.45);
   border-radius: var(--radio);
-  background: linear-gradient(135deg, rgb(61 139 253 / 0.18), rgb(124 92 255 / 0.14));
+  background: linear-gradient(135deg, rgb(30 180 234 / 0.18), rgb(124 92 255 / 0.14));
   text-align: left;
   font-size: 22px;
 }
@@ -413,7 +417,7 @@ body[data-modo="compras"] .lista { padding-bottom: calc(96px + var(--seguro-abaj
 .tarjeta.marca-no-hay { border-color: rgb(248 113 113 / 0.6); background: rgb(248 113 113 / 0.07); }
 .etiqueta-sin-guardar {
   display: inline-block; margin: 0 0 4px; padding: 2px 8px; border-radius: 6px;
-  background: rgb(61 139 253 / 0.15); color: var(--acento); font-size: 12px; font-weight: 700;
+  background: rgb(30 180 234 / 0.15); color: var(--acento); font-size: 12px; font-weight: 700;
 }
 .tarjeta-compra > .etiqueta { margin-left: 0; }
 
@@ -428,7 +432,7 @@ body[data-modo="compras"] .barra-compras {
   gap: 12px;
   padding: 10px calc(16px + var(--seguro-der)) calc(10px + var(--seguro-abajo)) calc(16px + var(--seguro-izq));
   border-top: 1px solid var(--borde);
-  background: rgb(20 24 33 / 0.95);
+  background: rgb(12 21 42 / 0.95);
   backdrop-filter: blur(14px);
   -webkit-backdrop-filter: blur(14px);
 }
@@ -463,7 +467,7 @@ body[data-modo="compras"] .barra-compras {
   gap: 8px;
   padding: 10px calc(12px + var(--seguro-der)) calc(10px + var(--seguro-abajo)) calc(12px + var(--seguro-izq));
   border-top: 1px solid var(--borde);
-  background: rgb(20 24 33 / 0.92);
+  background: rgb(12 21 42 / 0.92);
   backdrop-filter: blur(14px);
   -webkit-backdrop-filter: blur(14px);
 }
@@ -562,3 +566,278 @@ body.grabando .barra-texto::placeholder { color: var(--peligro); }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
 }
+
+/* ═════════════════════════════════════════════════════════════
+   12. DISEÑO COMPACTO
+   Misma información, menos espacio: en el Modo compras caben
+   unos 6 productos por pantalla. (Estas reglas van al final y
+   reemplazan los tamaños anteriores.)
+   ═════════════════════════════════════════════════════════════ */
+body { font-size: 15px; }
+
+.encabezado { padding-top: calc(6px + var(--seguro-arriba)); padding-bottom: 6px; }
+.marca-logo { width: 34px; height: 34px; border-radius: 10px; font-size: 13px; }
+.marca-nombre { font-size: 15px; }
+.marca-sub { font-size: 12px; }
+.encabezado .btn { padding: 6px 11px; font-size: 13px; }
+.encabezado-acciones { display: flex; align-items: center; gap: 6px; flex: none; }
+.btn-facturas { width: 36px; height: 36px; font-size: 17px; background: var(--superficie-2); }
+
+.pestanas { top: var(--alto-encabezado, calc(52px + var(--seguro-arriba))); gap: 6px; padding-top: 4px; padding-bottom: 8px; }
+.pestana { padding: 5px 10px; font-size: 13px; }
+.contador { min-width: 18px; font-size: 11px; }
+
+.seccion { margin-top: 12px; }
+.seccion-titulo { margin-bottom: 2px; font-size: 16px; }
+.grupo-titulo { margin: 8px 0 5px; font-size: 11px; }
+.tarjetas { gap: 6px; }
+
+.tarjeta { gap: 10px; padding: 8px 10px 8px 12px; border-radius: 12px; }
+.tarjeta-compra { padding-top: 6px; padding-bottom: 6px; }
+body[data-modo="compras"] .seccion { margin-top: 10px; }
+.tarjeta-modelo { font-size: 15px; line-height: 1.25; }
+.tarjeta-detalle { margin-top: 1px; font-size: 13px; line-height: 1.3; }
+.etiqueta, .etiqueta-quedan, .etiqueta-comprado, .etiqueta-no-hay {
+  margin-top: 4px; padding: 1px 6px; border-radius: 5px; font-size: 12px;
+}
+.tarjeta-meta { margin-top: 3px; font-size: 11px; }
+.btn-llego { min-height: 34px; padding: 0 10px; font-size: 13px; border-radius: 9px; }
+
+.btn-ir-compras, .aviso-instalar { margin-top: 8px; }
+.btn-ir-compras { padding: 9px 14px; }
+.btn-ir-compras-icono, .aviso-instalar-icono { font-size: 22px; }
+.btn-ir-compras-texto strong { font-size: 15px; }
+.btn-ir-compras-texto small { font-size: 12px; }
+.aviso-instalar-boton { padding: 9px 4px 9px 14px; }
+
+/* Modo compras: botones al lado del producto (no debajo) */
+.tarjeta-compra { flex-wrap: nowrap; align-items: center; }
+.botones-compra { display: flex; gap: 6px; width: auto; flex: none; }
+.btn-comprado, .btn-no-hay {
+  flex: none;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 1px;
+  width: 64px;
+  min-height: 48px;
+  padding: 4px 2px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.1;
+}
+.btn-comprado span, .btn-no-hay span { font-size: 17px; line-height: 1; }
+.btn-comprado { border: 0; background: var(--exito); color: #04261a; }
+.btn-no-hay { border: 1px solid rgb(248 113 113 / 0.55); background: transparent; color: var(--peligro); }
+.tarjeta.saliendo-comprado { animation: salirDerecha 0.18s ease-in forwards; border-color: var(--exito); }
+.tarjeta.saliendo-no-hay { animation: salirIzquierda 0.18s ease-in forwards; border-color: var(--peligro); }
+@keyframes salirDerecha { to { opacity: 0; transform: translateX(60px); } }
+@keyframes salirIzquierda { to { opacity: 0; transform: translateX(-60px); } }
+body[data-modo="compras"] .lista { padding-bottom: calc(80px + var(--seguro-abajo)); }
+.barra-compras-texto { font-size: 13px; }
+body[data-modo="compras"] .barra-compras { padding-top: 8px; padding-bottom: calc(8px + var(--seguro-abajo)); }
+.btn-exito { padding: 11px 18px; }
+
+/* "Ya revisados" (plegable) y filas compactas (también en facturas) */
+.revisados {
+  margin-top: 16px;
+  border: 1px solid var(--borde);
+  border-radius: 12px;
+  background: var(--superficie);
+}
+.revisados > summary, .factura > summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  cursor: pointer;
+  list-style: none;
+  font-weight: 700;
+}
+.revisados > summary::-webkit-details-marker, .factura > summary::-webkit-details-marker { display: none; }
+.revisados > summary::after, .factura > summary::after {
+  content: '▾'; margin-left: auto; color: var(--texto-suave); transition: transform 0.2s;
+}
+.revisados:not([open]) > summary::after, .factura:not([open]) > summary::after { transform: rotate(-90deg); }
+.revisados-conteo { color: var(--texto-suave); font-weight: 600; font-size: 13px; }
+.filas { margin: 0; padding: 0 8px 8px; list-style: none; display: grid; gap: 4px; }
+.fila-revisada {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 8px;
+  border-radius: 9px;
+  border-left: 3px solid transparent;
+}
+.fila-revisada.es-comprado { background: rgb(52 211 153 / 0.10); border-left-color: var(--exito); }
+.fila-revisada.es-no-hay { background: rgb(248 113 113 / 0.10); border-left-color: var(--peligro); }
+.fila-icono { flex: none; width: 18px; text-align: center; font-weight: 800; }
+.es-comprado .fila-icono, .es-comprado .fila-resultado { color: var(--exito); }
+.es-no-hay .fila-icono, .es-no-hay .fila-resultado { color: var(--peligro); }
+.fila-texto { flex: 1; min-width: 0; display: grid; }
+.fila-texto strong { font-size: 14px; overflow-wrap: anywhere; }
+.fila-texto small { color: var(--texto-suave); font-size: 12px; }
+.fila-resultado { flex: none; font-size: 12px; font-weight: 700; }
+.filas .btn-deshacer { min-height: 32px; padding: 0 10px; font-size: 12px; }
+
+/* Facturas */
+.encabezado-facturas { display: none; }
+body[data-modo="facturas"] .encabezado-lista,
+body[data-modo="facturas"] .pestanas,
+body[data-modo="facturas"] .barra { display: none; }
+body[data-modo="facturas"] .encabezado-facturas { display: flex; }
+body[data-modo="facturas"] .lista { padding-bottom: calc(32px + var(--seguro-abajo)); }
+.factura {
+  margin-top: 10px;
+  border: 1px solid var(--borde);
+  border-radius: 14px;
+  background: var(--superficie);
+  overflow: hidden;
+}
+.factura[open] { border-color: rgb(30 180 234 / 0.45); }
+.factura-titulo { display: grid; min-width: 0; }
+.factura-titulo strong { font-size: 14px; }
+.factura-titulo strong::first-letter { text-transform: uppercase; }
+.factura-titulo small { color: var(--texto-suave); font-weight: 500; font-size: 12px; }
+.factura-totales { display: flex; gap: 6px; margin-left: auto; }
+.total-comprado, .total-no-hay { padding: 2px 8px; border-radius: 999px; font-size: 12px; white-space: nowrap; }
+.factura-totales { flex: none; }
+.total-comprado { background: rgb(52 211 153 / 0.15); color: var(--exito); }
+.total-no-hay { background: rgb(248 113 113 / 0.15); color: var(--peligro); }
+.factura-seccion { padding: 0 4px; }
+.factura-seccion .grupo-titulo { margin: 6px 0 4px 8px; }
+.cargando-texto { margin-top: 20vh; text-align: center; color: var(--texto-suave); }
+
+
+/* ═════════════════════════════════════════════════════════════
+   13. MARCA Y ANIMACIONES
+   ═════════════════════════════════════════════════════════════ */
+body {
+  background:
+    radial-gradient(120% 60% at 100% 0%, rgb(30 180 234 / 0.10), transparent 60%),
+    radial-gradient(100% 50% at 0% 100%, rgb(33 82 176 / 0.18), transparent 60%),
+    var(--fondo);
+  background-attachment: fixed;
+}
+
+/* Logo */
+.marca-img { width: 46px; height: auto; flex: none; filter: drop-shadow(0 2px 6px rgb(30 180 234 / 0.25)); }
+.marca-nombre { letter-spacing: 0.6px; }
+.marca-celeste {
+  background: var(--degradado);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+.login-logo { width: 216px; height: auto; margin-bottom: 4px; animation: flotarEntrada 0.7s cubic-bezier(.2,.8,.2,1) both; }
+.login-logo { filter: drop-shadow(0 6px 22px rgb(30 180 234 / 0.25)); }
+.cargando-logo { width: 180px; height: auto; animation: respirar 1.4s ease-in-out infinite; }
+@keyframes flotarEntrada { from { opacity: 0; transform: translateY(16px) scale(0.94); } }
+@keyframes respirar { 50% { opacity: 0.55; transform: scale(0.96); } }
+
+/* Botones y pestaña activa con el degradado del logo */
+.btn-principal, .btn-enviar, .pestana[aria-selected="true"] {
+  background: var(--degradado);
+  border-color: transparent;
+  color: #ffffff;
+}
+.btn-enviar { box-shadow: 0 4px 14px rgb(30 180 234 / 0.35); }
+.pestana { transition: background 0.25s, color 0.25s, transform 0.15s, box-shadow 0.25s; }
+.pestana:active { transform: scale(0.95); }
+.pestana[aria-selected="true"] { box-shadow: 0 3px 12px rgb(30 180 234 / 0.35); }
+.btn, .btn-icono, .btn-llego, .btn-comprado, .btn-no-hay { transition: transform 0.12s, filter 0.2s, background 0.2s; }
+.btn:active, .btn-llego:active, .btn-comprado:active, .btn-no-hay:active { transform: scale(0.94); }
+.campo input:focus { box-shadow: 0 0 0 3px rgb(30 180 234 / 0.25); }
+.tarjeta { transition: border-color 0.2s, transform 0.15s; }
+.btn-ir-compras {
+  background: linear-gradient(135deg, rgb(33 82 176 / 0.35), rgb(30 180 234 / 0.18));
+  border-color: rgb(30 180 234 / 0.45);
+}
+.btn-ir-compras-icono { display: inline-block; animation: carrito 2.6s ease-in-out infinite; }
+@keyframes carrito { 0%, 80%, 100% { transform: translateX(0); } 88% { transform: translateX(4px) rotate(-6deg); } 94% { transform: translateX(-2px); } }
+
+/* Entrada en cascada al cambiar de pestaña o de pantalla */
+.lista.entrando .tarjeta,
+.lista.entrando .seccion-titulo,
+.lista.entrando .factura,
+.lista.entrando .btn-ir-compras { animation: aparecer 0.35s cubic-bezier(.2,.8,.2,1) both; }
+.lista.entrando .tarjetas > :nth-child(2) { animation-delay: 0.03s; }
+.lista.entrando .tarjetas > :nth-child(3) { animation-delay: 0.06s; }
+.lista.entrando .tarjetas > :nth-child(4) { animation-delay: 0.09s; }
+.lista.entrando .tarjetas > :nth-child(5) { animation-delay: 0.12s; }
+.lista.entrando .tarjetas > :nth-child(n+6) { animation-delay: 0.15s; }
+.lista.entrando .factura:nth-child(2) { animation-delay: 0.05s; }
+.lista.entrando .factura:nth-child(n+3) { animation-delay: 0.1s; }
+
+/* Contador que "salta" cuando cambia */
+.contador.pop { animation: pop 0.4s cubic-bezier(.3,1.6,.5,1); }
+@keyframes pop { 40% { transform: scale(1.45); } }
+
+/* Barra de progreso con el degradado y un brillo que pasa */
+.progreso-barra {
+  background: var(--degradado);
+  position: relative;
+  overflow: hidden;
+}
+.progreso-barra::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent, rgb(255 255 255 / 0.55), transparent);
+  transform: translateX(-100%);
+  animation: brillo 2.2s ease-in-out infinite;
+}
+@keyframes brillo { to { transform: translateX(100%); } }
+
+/* Toast con rebote y modal con zoom suave */
+.toast { transition: opacity 0.25s, transform 0.35s cubic-bezier(.3,1.5,.5,1); border-color: rgb(30 180 234 / 0.35); }
+.modal[open] { animation: zoomEntrada 0.25s cubic-bezier(.2,.9,.3,1.2); }
+@keyframes zoomEntrada { from { opacity: 0; transform: scale(0.92); } }
+
+/* Grabando: halo celeste en vez de rojo apagado */
+body.grabando #btn-audio { animation: halo 1.2s ease-out infinite; }
+
+/* Factura recién guardada: sello animado */
+.sello-guardado {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px;
+  background: rgb(52 211 153 / 0.12);
+  color: var(--exito);
+  font-weight: 800;
+  animation: aparecer 0.4s ease-out both;
+}
+.sello-guardado span {
+  display: grid; place-items: center;
+  width: 24px; height: 24px; border-radius: 50%;
+  background: var(--exito); color: #04261a;
+  animation: sello 0.6s cubic-bezier(.3,1.6,.5,1) 0.15s both;
+}
+@keyframes sello { from { transform: scale(0) rotate(-90deg); } }
+.factura-nueva { border-color: rgb(52 211 153 / 0.6) !important; box-shadow: 0 0 0 3px rgb(52 211 153 / 0.15); }
+.factura > summary { transition: background 0.2s; }
+.factura > summary:active { background: var(--superficie-2); }
+
+/* Apartados de la factura */
+.factura-cuerpo { padding-bottom: 4px; }
+.factura-apartado { margin: 4px 6px 10px; }
+.apartado-titulo {
+  display: flex; align-items: center; gap: 8px;
+  margin: 8px 4px 2px;
+  font-size: 14px;
+}
+.apartado-titulo small { color: var(--texto-suave); font-weight: 500; font-size: 12px; }
+.apartado-comprado .apartado-titulo { color: var(--exito); }
+.apartado-no-hay .apartado-titulo { color: var(--peligro); }
+.factura-acciones { display: flex; justify-content: flex-end; padding: 4px 12px 12px; }
+.btn-pdf {
+  background: var(--degradado);
+  color: #fff;
+  padding: 9px 16px;
+  font-size: 14px;
+  box-shadow: 0 4px 14px rgb(30 180 234 / 0.3);
+}
+.btn-pdf:disabled { opacity: 0.6; }

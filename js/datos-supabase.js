@@ -105,6 +105,27 @@ export async function actualizarEstado(ids, estado) {
   fusionar(data);
 }
 
+// ── Facturas de compra ──────────────────────────────────────
+
+export async function listarCompras() {
+  const { data, error } = await obtenerCliente()
+    .from('compras').select('*').order('creada_en', { ascending: false }).limit(60);
+  if (error) throw error;
+  return data;
+}
+
+/**
+ * Cierra la salida de compras en UNA operación del servidor (cerrar_compra):
+ * guarda la factura, quita lo comprado y deja lo no conseguido en la lista.
+ */
+export async function cerrarCompra(comprados, noConseguidos) {
+  const { data, error } = await obtenerCliente()
+    .rpc('cerrar_compra', { comprados, no_conseguidos: noConseguidos });
+  if (error) throw error;
+  await recargar();
+  return data;
+}
+
 export async function vaciar() {
   // Supabase exige un filtro en DELETE (protección contra borrados por error).
   // "id no es nulo" = todas las filas.

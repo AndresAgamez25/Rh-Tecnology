@@ -18,6 +18,21 @@ export const CATEGORIAS = [
     ],
   },
   {
+    id: 'servicio',
+    nombre: 'Servicio técnico',
+    // Repuestos para reparar celulares
+    subtipos: [
+      { id: 'pantallas', nombre: 'Pantallas' },
+      { id: 'tapas', nombre: 'Tapas' },
+      { id: 'tarjetas', nombre: 'Tarjetas' },
+      { id: 'camaras', nombre: 'Cámaras' },
+      { id: 'pines', nombre: 'Pines de carga' },
+      { id: 'botones', nombre: 'Botones' },
+      { id: 'baterias', nombre: 'Baterías' },
+      { id: 'otros', nombre: 'Otros repuestos' },
+    ],
+  },
+  {
     id: 'forros',
     nombre: 'Forros',
     subtipos: [
@@ -34,6 +49,7 @@ export const CATEGORIAS = [
       { id: 'titanio', nombre: 'Titanio' },
       { id: 'antiespia', nombre: 'Antiespía' },
       { id: 'curvo', nombre: 'Curvo' },
+      { id: 'camara', nombre: 'Protector de cámara' },
     ],
   },
   { id: 'cables', nombre: 'Cables', subtipos: [] },

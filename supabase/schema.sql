@@ -70,13 +70,15 @@ grant execute on function public.mi_perfil()    to authenticated;
 create table if not exists public.faltantes (
   id          uuid primary key default gen_random_uuid(),
   categoria   text not null
-              check (categoria in ('celulares','forros','vidrios','cables','cargadores','audifonos','otros')),
+              check (categoria in ('celulares','servicio','forros','vidrios','cables','cargadores','audifonos','otros')),
   subtipo     text
               check (
                 subtipo is null
                 or (categoria = 'celulares' and subtipo in ('samsung','xiaomi','motorola','apple','tecno','infinix','honor','otras'))
+    or (categoria = 'servicio'  and subtipo in ('pantallas','tapas','tarjetas','camaras','pines','botones','baterias','otros'))
+                or (categoria = 'servicio'  and subtipo in ('pantallas','tapas','tarjetas','camaras','pines','botones','baterias','otros'))
                 or (categoria = 'forros'    and subtipo in ('silicona','lujo'))
-                or (categoria = 'vidrios'   and subtipo in ('sencillo','blindado','titanio','antiespia','curvo'))
+                or (categoria = 'vidrios'   and subtipo in ('sencillo','blindado','titanio','antiespia','curvo','camara'))
                 or (categoria = 'audifonos' and subtipo in ('cable','inalambricos'))
               ),
   modelo      text not null default '' check (char_length(modelo)  <= 120),
@@ -231,20 +233,105 @@ create policy "marcar estado" on public.faltantes
 
 
 -- ─────────────────────────────────────────────────────────────
--- 8. CATEGORÍA CELULARES (agrupada por marca)
+-- 8. CATEGORÍAS CELULARES (por marca) Y SERVICIO TÉCNICO (por repuesto)
 --    Para bases creadas antes de existir esta categoría: se
 --    reemplazan las reglas CHECK de categoría y subtipo.
 -- ─────────────────────────────────────────────────────────────
 alter table public.faltantes drop constraint if exists faltantes_categoria_check;
 alter table public.faltantes add constraint faltantes_categoria_check
-  check (categoria in ('celulares','forros','vidrios','cables','cargadores','audifonos','otros'));
+  check (categoria in ('celulares','servicio','forros','vidrios','cables','cargadores','audifonos','otros'));
 
 alter table public.faltantes drop constraint if exists faltantes_check;
 alter table public.faltantes drop constraint if exists faltantes_subtipo_check;
 alter table public.faltantes add constraint faltantes_subtipo_check check (
     subtipo is null
     or (categoria = 'celulares' and subtipo in ('samsung','xiaomi','motorola','apple','tecno','infinix','honor','otras'))
+    or (categoria = 'servicio'  and subtipo in ('pantallas','tapas','tarjetas','camaras','pines','botones','baterias','otros'))
     or (categoria = 'forros'    and subtipo in ('silicona','lujo'))
-    or (categoria = 'vidrios'   and subtipo in ('sencillo','blindado','titanio','antiespia','curvo'))
+    or (categoria = 'vidrios'   and subtipo in ('sencillo','blindado','titanio','antiespia','curvo','camara'))
     or (categoria = 'audifonos' and subtipo in ('cable','inalambricos'))
 );
+
+
+-- ─────────────────────────────────────────────────────────────
+-- 9. FACTURAS DE COMPRA (historial permanente)
+--    Al terminar una salida de compras se guarda una "factura" con lo
+--    comprado y lo no conseguido. Es INMUTABLE: nadie puede editarla ni
+--    borrarla desde la app (solo leer). Se crea únicamente con la función
+--    cerrar_compra(), que en UNA transacción:
+--      1) guarda la factura,
+--      2) quita de faltantes lo comprado,
+--      3) deja lo no conseguido en la lista, marcado "no_conseguido".
+-- ─────────────────────────────────────────────────────────────
+create table if not exists public.compras (
+  id                   uuid primary key default gen_random_uuid(),
+  creada_en            timestamptz not null default now(),
+  hecha_por            text not null,
+  items                jsonb not null,
+  total_comprados      int not null default 0,
+  total_no_conseguidos int not null default 0
+);
+create index if not exists compras_creada_en_idx on public.compras (creada_en desc);
+
+alter table public.compras enable row level security;
+revoke all on public.compras from anon, authenticated;
+grant select on public.compras to authenticated;
+
+drop policy if exists "leer compras" on public.compras;
+create policy "leer compras" on public.compras
+  for select to authenticated
+  using ( (select public.es_permitido()) );
+
+create or replace function public.cerrar_compra(comprados uuid[], no_conseguidos uuid[])
+returns public.compras
+language plpgsql security definer
+set search_path = ''
+as $$
+declare
+  yo text;
+  factura public.compras;
+begin
+  yo := (select nombre from public.usuarios_permitidos where email = lower(auth.jwt() ->> 'email'));
+  if yo is null then
+    raise exception 'Sin permiso' using errcode = '42501';
+  end if;
+  comprados := coalesce(comprados, '{}');
+  no_conseguidos := coalesce(no_conseguidos, '{}');
+
+  insert into public.compras (hecha_por, items, total_comprados, total_no_conseguidos)
+  select yo,
+         jsonb_agg(jsonb_build_object(
+           'categoria', f.categoria, 'subtipo', f.subtipo, 'modelo', f.modelo,
+           'detalle', f.detalle, 'quedan', f.quedan, 'creado_por', f.creado_por,
+           'resultado', case when f.id = any(comprados) then 'comprado' else 'no_conseguido' end
+         ) order by (f.id = any(comprados)) desc, f.categoria, f.subtipo, f.modelo),
+         count(*) filter (where f.id = any(comprados)),
+         count(*) filter (where not f.id = any(comprados))
+  from public.faltantes f
+  where f.id = any(comprados) or f.id = any(no_conseguidos)
+  having count(*) > 0
+  returning * into factura;
+
+  if factura.id is null then
+    raise exception 'No hay productos revisados para guardar' using errcode = '22023';
+  end if;
+
+  delete from public.faltantes where id = any(comprados);
+  update public.faltantes set estado = 'no_conseguido' where id = any(no_conseguidos);
+  return factura;
+end;
+$$;
+
+revoke all on function public.cerrar_compra(uuid[], uuid[]) from public, anon;
+grant execute on function public.cerrar_compra(uuid[], uuid[]) to authenticated;
+
+-- Las facturas nuevas llegan en tiempo real a todos los celulares
+do $$
+begin
+  if not exists (
+    select 1 from pg_publication_tables
+    where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'compras'
+  ) then
+    alter publication supabase_realtime add table public.compras;
+  end if;
+end $$;

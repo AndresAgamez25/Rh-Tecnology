@@ -7,7 +7,7 @@
 // Estrategias:
 //  - Archivos de la app (página, CSS, JS, iconos): primero internet;
 //    sin señal → la copia guardada. Así nunca se queda con código viejo.
-//  - Librería de Supabase (CDN, versión fija): la guardada.
+//  - Librerías de la CDN con versión fija (Supabase, jsPDF): la guardada.
 // ⚠️ Al publicar cambios, sube VERSION para limpiar la caché vieja.
 // ─────────────────────────────────────────────────────────────
 const VERSION = 'rh-v1';
@@ -27,10 +27,14 @@ const ARCHIVOS = [
   './js/media.js',
   './js/supabase.js',
   './js/ui.js',
+  './js/pdf.js',
+  './icons/logo-rh.svg',
+  './icons/logo.webp',
   './icons/icon-192.png',
   './icons/apple-touch-icon.png',
 ];
-const CDN = 'https://cdn.jsdelivr.net/npm/@supabase/';
+// Librerías con versión fija (Supabase, jsPDF): se guardan para siempre
+const CDN = 'https://cdn.jsdelivr.net/npm/';
 
 self.addEventListener('install', (e) => {
   e.waitUntil(

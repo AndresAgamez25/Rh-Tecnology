@@ -45,9 +45,11 @@ const elementos = {
   password: $('login-password'),
   errorLogin: $('login-error'),
   btnLogin: $('btn-login'),
-  terminar: $('btn-terminar'),
-  guardarCompras: $('btn-guardar-compras'),
-  sinGuardar: $('compras-sin-guardar'),
+  salirCompras: $('btn-salir-compras'),
+  terminarCompra: $('btn-terminar-compra'),
+  resumenCompras: $('compras-resumen'),
+  facturas: $('btn-facturas'),
+  volver: $('btn-volver'),
   progreso: $('compras-progreso'),
   cancelarAudio: $('btn-cancelar-audio'),
   fotoBoton: $('btn-foto'),
@@ -67,13 +69,28 @@ const estado = {
   // Marcas aún no guardadas: { idProducto: 'comprado' | 'no_conseguido' | 'pendiente' }
   borrador: leerBorrador(),
   guardando: false,
+  verFacturas: false,
+  facturas: [],
+  facturaAbierta: null,
+  facturaNueva: null,
 };
 
 // ── Render ───────────────────────────────────────────────────
 
 function render() {
-  document.body.dataset.modo = estado.comprasDesde ? 'compras' : 'lista';
-  if (estado.comprasDesde) {
+  const pantalla = estado.verFacturas ? 'facturas' : estado.comprasDesde ? 'compras' : 'lista';
+  document.body.dataset.modo = pantalla;
+  if (pantalla === 'facturas') {
+    ui.dibujarFacturas(elementos.lista, estado.facturas, {
+      abierta: estado.facturaAbierta,
+      nueva: estado.facturaNueva,
+      onPDF: descargarPDF,
+    });
+    // la animación de "guardada" solo una vez (cuando ya llegaron las facturas)
+    if (estado.facturas !== null) estado.facturaNueva = null;
+    return;
+  }
+  if (pantalla === 'compras') {
     renderCompras();
     return;
   }
@@ -89,34 +106,44 @@ function renderCompras() {
   limpiarBorrador();
   const r = ui.resumenCompras(estado.items, estado.comprasDesde, estado.borrador);
   const total = r.comprado + r.no_conseguido + r.pendiente;
+  const revisados = r.comprado + r.no_conseguido;
   elementos.progreso.textContent = total
     ? `${r.comprado} comprados · ${r.no_conseguido} no había · ${r.pendiente} por revisar`
     : 'Nada por comprar';
-  elementos.barraProgreso.style.width = `${total ? Math.round(((total - r.pendiente) / total) * 100) : 0}%`;
-
-  const cambios = Object.keys(estado.borrador).length;
-  elementos.guardarCompras.disabled = cambios === 0 || estado.guardando;
-  elementos.guardarCompras.textContent = estado.guardando ? 'Guardando…' : 'Guardar cambios';
-  elementos.sinGuardar.textContent = cambios
-    ? `${cambios} ${cambios === 1 ? 'cambio' : 'cambios'} sin guardar`
-    : 'Todo guardado ✓';
-
+  elementos.barraProgreso.style.width = `${total ? Math.round((revisados / total) * 100) : 0}%`;
+  elementos.resumenCompras.textContent = `${revisados} de ${total} revisados`;
+  elementos.terminarCompra.disabled = estado.guardando;
+  elementos.terminarCompra.textContent = estado.guardando ? 'Guardando…' : 'Terminar compra';
   ui.dibujarCompras(elementos.lista, estado.items, estado.comprasDesde, {
     borrador: estado.borrador,
     onMarcar: marcarEnBorrador,
+    onDeshacer: deshacerMarca,
   });
+}
+
+/** Entrada en cascada de las tarjetas al cambiar de pestaña o de pantalla. */
+function animarEntrada() {
+  const l = elementos.lista;
+  l.classList.remove('entrando');
+  void l.offsetWidth;
+  l.classList.add('entrando');
+  clearTimeout(animarEntrada.t);
+  animarEntrada.t = setTimeout(() => l.classList.remove('entrando'), 700);
 }
 
 function cambiarPestana(id) {
   estado.pestana = id;
   try { localStorage.setItem('rh-pestana', id); } catch { /* sin almacenamiento */ }
   render();
+  animarEntrada();
   window.scrollTo({ top: 0 });
 }
 
 // ── Modo compras ─────────────────────────────────────────────
-// Se guarda en el celular, así si se cierra la app en plena compra
-// (pasa mucho en iPhone) se vuelve a abrir en el Modo compras.
+// Al marcar "Comprado" o "No hay", el producto sale de la vista y sube el
+// siguiente. Las marcas quedan en un BORRADOR en el celular (sobrevive si se
+// cierra la app) y se guardan al tocar "Terminar compra", que además crea
+// la FACTURA permanente.
 
 function leerCompras() {
   try { return Number(localStorage.getItem('rh-compras-desde')) || null; } catch { return null; }
@@ -133,43 +160,19 @@ function entrarACompras() {
   estado.comprasDesde = Date.now();
   guardarCompras(estado.comprasDesde);
   render();
+  animarEntrada();
   window.scrollTo({ top: 0 });
 }
 
-async function terminarCompras() {
-  const pendientes = Object.keys(estado.borrador).length;
-  if (pendientes) {
-    const guardar = await ui.confirmar({
-      titulo: 'Tienes cambios sin guardar',
-      mensaje: `Hay ${pendientes} ${pendientes === 1 ? 'marca' : 'marcas'} sin guardar. ¿Guardarlas antes de terminar?`,
-      textoAceptar: 'Guardar',
-      peligro: false,
-    });
-    if (!guardar || !(await guardarCambiosCompras())) return;
-  }
-  const r = ui.resumenCompras(estado.items, estado.comprasDesde);
-  const partes = [
-    `Compraste ${r.comprado}.`,
-    r.no_conseguido === 1 ? '1 no se consiguió: sigue en la lista para la próxima vez.' : '',
-    r.no_conseguido > 1 ? `${r.no_conseguido} no se consiguieron: siguen en la lista para la próxima vez.` : '',
-    r.pendiente === 1 ? '1 quedó sin revisar.' : '',
-    r.pendiente > 1 ? `${r.pendiente} quedaron sin revisar.` : '',
-  ];
-  const ok = await ui.confirmar({
-    titulo: '¿Terminar las compras?',
-    mensaje: partes.filter(Boolean).join(' '),
-    textoAceptar: 'Terminar',
-    peligro: false,
-  });
-  if (!ok) return;
+/** Salir sin terminar: las marcas quedan guardadas en el celular para seguir después. */
+function salirDeCompras() {
+  const hayMarcas = Object.keys(estado.borrador).length > 0;
   estado.comprasDesde = null;
   guardarCompras(null);
   render();
   window.scrollTo({ top: 0 });
-  ui.toast('Compras terminadas. Lo comprado sale como "🛒 Comprado" hasta que llegue.', 4500);
+  if (hayMarcas) ui.toast('Tus marcas quedan guardadas en este celular. Entra de nuevo para terminar la compra.', 5000);
 }
-
-// ── Borrador del Modo compras ────────────────────────────────
 
 function leerBorrador() {
   try { return JSON.parse(localStorage.getItem('rh-compras-borrador') || '{}') || {}; } catch { return {}; }
@@ -185,7 +188,7 @@ function limpiarBorrador() {
   let cambio = false;
   for (const [id, valor] of Object.entries(estado.borrador)) {
     const item = porId.get(id);
-    if (!item || valor === ui.estadoGuardado(item, estado.comprasDesde)) {
+    if (!item || valor === ui.estadoGuardado(item, estado.comprasDesde ?? Date.now())) {
       delete estado.borrador[id];
       cambio = true;
     }
@@ -193,43 +196,112 @@ function limpiarBorrador() {
   if (cambio) guardarBorradorLocal();
 }
 
-/**
- * Tocar "Comprado" o "No hay" marca la tarjeta; tocar el MISMO botón otra
- * vez la desmarca. Nada va a la base hasta "Guardar cambios".
- */
-function marcarEnBorrador(item, tocado) {
-  const guardado = ui.estadoGuardado(item, estado.comprasDesde);
-  const actual = estado.borrador[item.id] ?? guardado;
-  const nuevo = actual === tocado ? 'pendiente' : tocado;
-  if (nuevo === guardado) delete estado.borrador[item.id];
-  else estado.borrador[item.id] = nuevo;
+/** Marca un producto (comprado / no_conseguido): sale de la vista y sube el siguiente. */
+async function marcarEnBorrador(item, marca, nodo) {
+  if (nodo) {
+    nodo.classList.add(marca === 'comprado' ? 'saliendo-comprado' : 'saliendo-no-hay');
+    await new Promise((r) => setTimeout(r, 180));
+  }
+  estado.borrador[item.id] = marca;
   guardarBorradorLocal();
   render();
 }
 
-async function guardarCambiosCompras() {
-  const cambios = Object.entries(estado.borrador);
-  if (!cambios.length || estado.guardando) return true;
+/** "Deshacer" en "Ya revisados": el producto vuelve a "por revisar". */
+function deshacerMarca(item) {
+  if (ui.estadoGuardado(item, estado.comprasDesde) === 'pendiente') delete estado.borrador[item.id];
+  else estado.borrador[item.id] = 'pendiente';
+  guardarBorradorLocal();
+  render();
+}
+
+async function terminarCompra() {
+  if (estado.guardando) return;
+  const efectivo = (it) => estado.borrador[it.id] ?? ui.estadoGuardado(it, estado.comprasDesde);
+  const comprados = estado.items.filter((it) => efectivo(it) === 'comprado').map((it) => it.id);
+  const noConseguidos = estado.items.filter((it) => efectivo(it) === 'no_conseguido').map((it) => it.id);
+  const sinRevisar = estado.items.length - comprados.length - noConseguidos.length;
+
+  if (!comprados.length && !noConseguidos.length) {
+    const salir = await ui.confirmar({
+      titulo: 'No marcaste ningún producto',
+      mensaje: '¿Salir del Modo compras sin crear factura?',
+      textoAceptar: 'Salir',
+      peligro: false,
+    });
+    if (salir) salirDeCompras();
+    return;
+  }
+
+  const ok = await ui.confirmar({
+    titulo: '¿Terminar la compra?',
+    mensaje: [
+      `✓ Comprados: ${comprados.length} (salen de la lista)`,
+      `✗ No se consiguieron: ${noConseguidos.length} (siguen en la lista)`,
+      sinRevisar ? `• Sin revisar: ${sinRevisar} (siguen en la lista)` : '',
+      '',
+      'Se guardará la factura de esta compra.',
+    ].filter((linea, i, todas) => linea || todas[i + 1]).join('\n'),
+    textoAceptar: 'Terminar y guardar',
+    peligro: false,
+  });
+  if (!ok) return;
+
   estado.guardando = true;
   render();
   try {
-    // Un envío por cada estado (máximo 3)
-    for (const valor of ['comprado', 'no_conseguido', 'pendiente']) {
-      const ids = cambios.filter(([, v]) => v === valor).map(([id]) => id);
-      if (ids.length) await datos.actualizarEstado(ids, valor);
-    }
+    const factura = await datos.cerrarCompra(comprados, noConseguidos);
     estado.borrador = {};
     guardarBorradorLocal();
-    ui.toast(`✅ ${cambios.length} ${cambios.length === 1 ? 'cambio guardado' : 'cambios guardados'}`);
-    return true;
+    estado.comprasDesde = null;
+    guardarCompras(null);
+    estado.guardando = false;
+    estado.facturaNueva = factura?.id ?? null;
+    await abrirFacturas(factura?.id);
+    ui.toast('🧾 Factura guardada', 3500);
   } catch (error) {
     console.error(error);
-    ui.toast('No se pudo guardar. Revisa tu conexión e intenta de nuevo.');
-    return false;
-  } finally {
     estado.guardando = false;
     render();
+    ui.toast('No se pudo guardar la compra. Revisa tu conexión e intenta de nuevo.', 6000);
   }
+}
+
+// ── Facturas ─────────────────────────────────────────────────
+
+async function abrirFacturas(idAbierta = null) {
+  estado.verFacturas = true;
+  estado.facturas = null; // "cargando"
+  render();
+  window.scrollTo({ top: 0 });
+  try {
+    estado.facturas = await datos.listarCompras();
+    estado.facturaAbierta = idAbierta ?? estado.facturas[0]?.id ?? null;
+  } catch (error) {
+    console.error(error);
+    estado.facturas = [];
+    ui.toast('No se pudieron cargar las facturas.');
+  }
+  render();
+  animarEntrada();
+}
+
+async function descargarPDF(factura) {
+  try {
+    const { descargarFacturaPDF } = await import('./pdf.js');
+    await descargarFacturaPDF(factura);
+    ui.toast('📄 PDF descargado');
+  } catch (error) {
+    console.error(error);
+    ui.toast('No se pudo crear el PDF. Revisa tu conexión e intenta de nuevo.');
+  }
+}
+
+function cerrarFacturas() {
+  estado.verFacturas = false;
+  render();
+  animarEntrada();
+  window.scrollTo({ top: 0 });
 }
 
 function leerPestana() {
@@ -398,8 +470,10 @@ elementos.texto.addEventListener('keydown', (e) => {
 });
 elementos.barra.addEventListener('submit', enviar);
 elementos.reiniciar.addEventListener('click', reiniciarLista);
-elementos.terminar.addEventListener('click', terminarCompras);
-elementos.guardarCompras.addEventListener('click', guardarCambiosCompras);
+elementos.salirCompras.addEventListener('click', salirDeCompras);
+elementos.terminarCompra.addEventListener('click', terminarCompra);
+elementos.facturas.addEventListener('click', () => abrirFacturas());
+elementos.volver.addEventListener('click', cerrarFacturas);
 
 // ── Audio ────────────────────────────────────────────────────
 
@@ -490,6 +564,16 @@ elementos.foto.addEventListener('change', async () => {
   }
 });
 
+// ── Alto del encabezado ──────────────────────────────────────
+// Las pestañas van pegadas JUSTO debajo del encabezado; como su alto cambia
+// (notch del iPhone, nombre largo), lo medimos en vez de adivinarlo.
+const medirEncabezado = () => {
+  const h = document.querySelector('.encabezado-lista')?.getBoundingClientRect().height;
+  if (h) document.documentElement.style.setProperty('--alto-encabezado', `${Math.round(h)}px`);
+};
+if ('ResizeObserver' in window) new ResizeObserver(medirEncabezado).observe(document.querySelector('.encabezado-lista'));
+window.addEventListener('resize', medirEncabezado);
+
 // ── Vistas y sesión ──────────────────────────────────────────
 
 /** Si un paso tarda demasiado, falla con un mensaje claro (nada de esperas mudas). */
@@ -504,6 +588,7 @@ function conTiempo(promesa, paso, ms = 15_000) {
 function mostrarVista(vista) {
   log('vista →', vista);
   document.body.dataset.vista = vista;
+  if (vista === 'app') animarEntrada();
   if (vista === 'login') elementos.email.focus();
 }
 
@@ -586,7 +671,7 @@ async function alCambiarUsuario(usuario, evento = 'directo') {
 }
 
 async function iniciarModoDemo() {
-  elementos.usuario.textContent = 'Modo demo · datos de prueba';
+  elementos.usuario.textContent = 'Modo demo';
   await datos.usar('demo');
   estado.modo = 'demo';
   estado.items = await datos.listar();

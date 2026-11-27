@@ -48,40 +48,36 @@ test('lo desconocido va a Otros', () => {
   assert.equal(o.modelo, 'Memoria 64GB');
 });
 
-test('"llegó" quita el ítem correcto', () => {
-  const lista = [
-    { id: '1', categoria: 'vidrios', subtipo: 'blindado', modelo: 'Galaxy A15', detalle: '' },
-    { id: '2', categoria: 'vidrios', subtipo: 'blindado', modelo: 'Galaxy A25', detalle: '' },
-    { id: '3', categoria: 'forros', subtipo: 'silicona', modelo: 'Galaxy A15', detalle: '' },
-  ];
+test('por voz/texto NUNCA se quita: "llegó" no hace nada y avisa', () => {
+  const lista = [{ id: '1', categoria: 'vidrios', subtipo: 'blindado', modelo: 'Galaxy A15', detalle: '' }];
   const r = clasificar('Ya llegó el vidrio blindado del A15', lista);
-  assert.deepEqual(r.acciones, [{ tipo: 'quitar', id: '1' }]);
+  assert.deepEqual(r.acciones, []);
+  assert.match(r.respuesta, /✓ Llegó/);
 });
 
-test('"llegó" + "no hay" en la misma frase', () => {
-  const lista = [{ id: '9', categoria: 'forros', subtipo: 'lujo', modelo: 'iPhone 13', detalle: '' }];
-  const r = clasificar('Ya llegó el forro de lujo del iPhone 13 pero no hay vidrio curvo S23', lista);
-  assert.deepEqual(r.acciones[0], { tipo: 'quitar', id: '9' });
-  assert.deepEqual([r.acciones[1].categoria, r.acciones[1].subtipo, r.acciones[1].modelo], ['vidrios', 'curvo', 'S23']);
+test('"llegó" + "no hay": solo se agrega lo que falta', () => {
+  const r = clasificar('Ya llegó el forro de lujo del iPhone 13 pero no hay vidrio curvo S23');
+  assert.equal(r.acciones.length, 1);
+  assert.deepEqual([r.acciones[0].tipo, r.acciones[0].categoria, r.acciones[0].subtipo, r.acciones[0].modelo], ['agregar', 'vidrios', 'curvo', 'S23']);
 });
 
-test('vaciar la lista', () => {
-  const r = clasificar('Ya se actualizó', [{ id: '1', categoria: 'otros', modelo: 'x' }]);
-  assert.deepEqual(r.acciones, [{ tipo: 'vaciar' }]);
+test('"ya se actualizó" no vacía la lista', () => {
+  const r = clasificar('Ya se actualizó');
+  assert.deepEqual(r.acciones, []);
 });
 
-test('vaciar y luego agregar lo que sigue faltando', () => {
+test('"ya se surtió todo, solo falta…" solo agrega lo que falta', () => {
   const r = clasificar('Ya se surtió todo, solo falta forro silicona A05');
-  assert.equal(r.acciones[0].tipo, 'vaciar');
-  assert.deepEqual([r.acciones[1].categoria, r.acciones[1].modelo], ['forros', 'A05']);
+  assert.deepEqual(r.acciones.map((a) => [a.tipo, a.categoria, a.modelo]), [['agregar', 'forros', 'A05']]);
 });
 
-test('repetido: se reemplaza para actualizar "quedan"', () => {
-  const lista = [{ id: '5', categoria: 'forros', subtipo: 'silicona', modelo: 'A15', detalle: '', quedan: 'rojo' }];
-  const r = clasificar('no hay forro silicona A15, quedan negro', lista);
-  assert.deepEqual(r.acciones[0], { tipo: 'quitar', id: '5', reemplazo: true });
-  assert.equal(r.acciones[1].quedan, 'negro');
-  assert.match(r.respuesta, /agregué 1 producto\./);
+test('Redmi 17 de 256 y de 128 son productos distintos', () => {
+  const a = clasificar('no hay Redmi 17 de 256 gigas, queda 1').acciones[0];
+  const b = clasificar('no hay Redmi 17 de 128 gigas').acciones[0];
+  assert.equal(a.detalle, '256 GB');
+  assert.equal(b.detalle, '128 GB');
+  assert.equal(a.tipo, 'agregar');
+  assert.equal(b.tipo, 'agregar');
 });
 
 test('texto sin sentido no agrega basura', () => {
@@ -124,12 +120,6 @@ test('celular sin marca conocida va a "otras"', () => {
 test('memoria de 64gb sigue en Otros (no es celular)', () => {
   const [o] = agregados(clasificar('No hay memoria de 64gb'));
   assert.equal(o.categoria, 'otros');
-});
-
-test('llegó un celular lo quita', () => {
-  const lista = [{ id: 'c1', categoria: 'celulares', subtipo: 'xiaomi', modelo: 'Redmi 13C', detalle: '128 GB · 6 GB RAM' }];
-  const r = clasificar('ya llegó el Redmi 13C', lista);
-  assert.deepEqual(r.acciones, [{ tipo: 'quitar', id: 'c1' }]);
 });
 
 test('"de 128" sin decir gigas = 128 GB', () => {

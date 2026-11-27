@@ -223,27 +223,6 @@ export function segmentar(texto) {
     .filter(Boolean);
 }
 
-/** Busca en la lista los ítems a los que se refiere una frase de "llegó". */
-function buscarCoincidencias(frase, lista) {
-  const categoria = detectarCategoria(frase);
-  const subtipo = categoria && categoria !== 'celulares' ? detectarSubtipo(categoria, frase) : null;
-  const { resto } = extraerDetalles(frase, categoria);
-  const palabras = palabrasModelo(resto, categoria);
-  if (!palabras.length && !categoria) return [];
-
-  const puntajes = lista.map((it) => {
-    const delItem = new Set(normalizar(`${it.modelo} ${it.detalle}`).split(/[\s·,]+/));
-    const aciertos = palabras.filter((p) => delItem.has(p)).length;
-    if (palabras.length && aciertos === 0) return 0;
-    let puntos = aciertos * 3 + 1;
-    if (categoria) { if (it.categoria !== categoria) return 0; puntos += 2; }
-    if (subtipo) { if (it.subtipo && it.subtipo !== subtipo) return 0; puntos += 1; }
-    return puntos;
-  });
-  const maximo = Math.max(0, ...puntajes);
-  return maximo > 0 ? lista.filter((_, i) => puntajes[i] === maximo) : [];
-}
-
 /** Construye la acción "agregar" de una frase. */
 function construirItem(frase, quedan, anterior) {
   let categoria = detectarCategoria(frase);
@@ -274,32 +253,26 @@ function plural(n, uno, varios) { return `${n} ${n === 1 ? uno : varios}`; }
 
 /**
  * @param {string} texto  Lo que escribió el usuario.
- * @param {Array} lista   Faltantes actuales (para saber qué quitar).
+ * Por voz/texto solo se AGREGA: lo de quitar se hace con el botón "✓ Llegó".
  */
-export function clasificar(texto, lista = []) {
+export function clasificar(texto) {
   let t = normalizar(texto).replace(/\s+/g, ' ').trim();
   const acciones = [];
-  const noEncontrados = [];
-  let vigentes = [...lista];
+  // Por voz/texto SOLO se agrega. Si pide quitar o vaciar, no se hace (se avisa).
+  let pidioQuitar = false;
 
-  // 1) ¿Pidió vaciar? Se vacía primero y luego se agrega lo que siga.
+  // 1) "Ya se actualizó / borrar todo": no se vacía; solo se quita esa parte de la frase
   if (new RegExp(RE_VACIAR.source).test(t)) {
-    acciones.push({ tipo: 'vaciar' });
-    vigentes = [];
+    pidioQuitar = true;
     t = t.replace(RE_VACIAR, '|');
   }
 
   // 2) Recorremos cada frase
   let anterior = null;
   for (const frase of segmentar(t)) {
-    // 2a) "Llegó / ya hay ..." → quitar
+    // 2a) "Llegó / ya hay ..." → no se quita nada por voz (se usa el botón "✓ Llegó")
     if (RE_QUITAR.test(frase) && !RE_AGREGAR.test(frase)) {
-      const encontrados = buscarCoincidencias(frase, vigentes);
-      if (!encontrados.length) noEncontrados.push(frase.replace(RE_QUITAR, '').trim());
-      for (const it of encontrados) {
-        acciones.push({ tipo: 'quitar', id: it.id });
-        vigentes = vigentes.filter((v) => v.id !== it.id);
-      }
+      pidioQuitar = true;
       anterior = null;
       continue;
     }
@@ -320,36 +293,17 @@ export function clasificar(texto, lista = []) {
 
     const item = construirItem(producto, quedan, anterior);
 
-    // Si ya existía el mismo producto, lo reemplazamos (actualiza "quedan")
-    const repetido = vigentes.find((v) =>
-      v.categoria === item.categoria && (v.subtipo ?? null) === item.subtipo &&
-      normalizar(v.modelo) === normalizar(item.modelo) && normalizar(v.detalle) === normalizar(item.detalle));
-    if (repetido) {
-      acciones.push({ tipo: 'quitar', id: repetido.id, reemplazo: true });
-      vigentes = vigentes.filter((v) => v.id !== repetido.id);
-    }
-
+    // Si ya existe igual, la app no lo repite (solo actualiza "quedan")
     acciones.push(item);
     anterior = item;
   }
 
-  return { acciones, respuesta: resumir(acciones, noEncontrados) };
+  return { acciones, respuesta: resumir(acciones, pidioQuitar) };
 }
 
-function resumir(acciones, noEncontrados) {
-  const vacio = acciones.some((a) => a.tipo === 'vaciar');
+function resumir(acciones, pidioQuitar) {
   const agregados = acciones.filter((a) => a.tipo === 'agregar').length;
-  // los "quitar" por reemplazo (actualizar un repetido) no cuentan como quitados
-  const quitados = acciones.filter((a) => a.tipo === 'quitar' && !a.reemplazo).length;
-
-  const partes = [];
-  if (vacio) partes.push('vacié la lista');
-  if (agregados) partes.push(`agregué ${plural(agregados, 'producto', 'productos')}`);
-  if (quitados) partes.push(`quité ${plural(quitados, 'producto', 'productos')}`);
-
-  let frase = partes.length
-    ? `Listo: ${partes.join(', ').replace(/, ([^,]*)$/, ' y $1')}.`
-    : '';
-  if (noEncontrados.length) frase += `${frase ? ' ' : ''}No encontré en la lista: ${noEncontrados.join(', ')}.`;
+  let frase = agregados ? `Listo: agregué ${plural(agregados, 'producto', 'productos')}.` : '';
+  if (pidioQuitar) frase += `${frase ? ' ' : ''}Para quitar, toca "✓ Llegó" en el producto (por voz solo se agrega).`;
   return frase || 'No entendí qué falta. Prueba: «No hay forro de silicona A15, quedan azul».';
 }

@@ -472,21 +472,16 @@ function leerPestana() {
  * Orden: vaciar → quitar → agregar.
  * Devuelve false si el usuario canceló el vaciado.
  */
-/** Devuelve { aplicado, repetidos } (repetidos = nombres que ya estaban en la lista). */
+/**
+ * Aplica lo que entendió la IA (o el clasificador). Por voz, texto o foto
+ * SOLO SE AGREGA: cualquier "quitar" o "vaciar" se ignora (para quitar está
+ * el botón "✓ Llegó" y para borrar todo, "Reiniciar lista").
+ * Si el producto ya está EXACTAMENTE igual (misma categoría, tipo, modelo y
+ * detalle: 128 GB y 256 GB son distintos), no se repite; solo se actualiza "Quedan".
+ * Devuelve { repetidos, actualizados, ignorados }.
+ */
 async function aplicarAcciones(acciones) {
-  if (acciones.some((a) => a.tipo === 'vaciar')) {
-    const ok = await ui.confirmar({
-      titulo: '¿Vaciar la lista?',
-      mensaje: 'Se borrarán todos los faltantes para todos los usuarios.',
-      textoAceptar: 'Sí, vaciar',
-    });
-    if (!ok) return { aplicado: false, repetidos: [] };
-    await datos.vaciar();
-  }
-
-  const ids = acciones.filter((a) => a.tipo === 'quitar' && a.id).map((a) => a.id);
-  if (ids.length) await datos.quitar(ids);
-
+  const ignorados = acciones.filter((a) => a.tipo !== 'agregar').length;
   const nuevos = acciones
     .filter((a) => a.tipo === 'agregar')
     .map((a) => ({
@@ -495,19 +490,27 @@ async function aplicarAcciones(acciones) {
       detalle: String(a.detalle ?? '').slice(0, 200),
       quedan: String(a.quedan ?? '').slice(0, 120),
     }));
-  // Sin repetidos: si ya está en la lista (o viene dos veces), no se agrega otra vez
-  const vaciada = acciones.some((a) => a.tipo === 'vaciar');
-  const quitados = new Set(ids);
-  const vistos = new Set(vaciada ? [] : estado.items.filter((it) => !quitados.has(it.id)).map(claveFaltante));
+  const existentes = new Map(estado.items.map((it) => [claveFaltante(it), it]));
+  const vistos = new Set();
   const repetidos = [];
-  const unicos = nuevos.filter((p) => {
+  const actualizados = [];
+  const unicos = [];
+  for (const p of nuevos) {
     const k = claveFaltante(p);
-    if (vistos.has(k)) { repetidos.push(p.modelo || p.detalle); return false; }
+    if (vistos.has(k)) continue; // viene dos veces en el mismo mensaje
     vistos.add(k);
-    return true;
-  });
+    const ya = existentes.get(k);
+    if (!ya) { unicos.push(p); continue; }
+    const nombre = [p.modelo, p.detalle].filter(Boolean).join(' ');
+    if (p.quedan && p.quedan !== ya.quedan) {
+      await datos.editar(ya.id, { categoria: ya.categoria, subtipo: ya.subtipo, modelo: ya.modelo, detalle: ya.detalle, quedan: p.quedan });
+      actualizados.push(`${nombre} (quedan: ${p.quedan})`);
+    } else {
+      repetidos.push(nombre);
+    }
+  }
   if (unicos.length) await datos.agregar(unicos);
-  return { aplicado: true, repetidos };
+  return { repetidos, actualizados, ignorados, agregados: unicos.length };
 }
 
 /**
@@ -528,26 +531,26 @@ async function interpretar(entrada) {
       if (!entrada.texto) throw Object.assign(new Error('sin-respaldo'), { razon: error.message });
     }
   }
-  return { ...clasificar(entrada.texto, estado.items), conIA: false };
+  return { ...clasificar(entrada.texto), conIA: false };
 }
 
 /** Procesa texto, audio o foto y aplica las acciones. */
 async function procesarMensaje(entrada) {
   const { acciones, respuesta, transcripcion, conIA } = await interpretar(entrada);
-  const { aplicado, repetidos } = await aplicarAcciones(acciones);
-  if (!aplicado) return { aplicado, mensaje: 'No se vació la lista.' };
+  const r = await aplicarAcciones(acciones);
 
   let mensaje = respuesta;
-  if (repetidos.length) {
-    const agregados = acciones.filter((a) => a.tipo === 'agregar').length - repetidos.length;
-    const aviso = `⚠️ Ya estaba en la lista: ${repetidos.join(', ')} (no se repitió)`;
-    mensaje = agregados > 0 || acciones.some((a) => a.tipo !== 'agregar') ? `${mensaje} · ${aviso}` : aviso;
-  }
-  if (transcripcion && entrada.audio) mensaje = `🎙️ «${transcripcion}» → ${respuesta}`;
+  const avisos = [];
+  if (r.actualizados.length) avisos.push(`✏️ Actualicé: ${r.actualizados.join(', ')}`);
+  if (r.repetidos.length) avisos.push(`⚠️ Ya estaba en la lista: ${r.repetidos.join(', ')} (no se repitió)`);
+  if (r.ignorados) avisos.push('Por voz solo se agrega: para quitar, toca "✓ Llegó" en el producto');
+  // Si no se agregó nada nuevo, los avisos reemplazan la respuesta de la IA (que podría decir "agregué…")
+  if (avisos.length) mensaje = r.agregados ? `${respuesta} · ${avisos.join(' · ')}` : avisos.join(' · ');
+  if (transcripcion && entrada.audio) mensaje = `🎙️ «${transcripcion}» → ${mensaje}`;
   if (!conIA && estado.modo === 'supabase') {
     mensaje += ` (sin IA${estado.ultimoErrorIA ? ` — ${estado.ultimoErrorIA}` : ''})`;
   }
-  return { aplicado, mensaje };
+  return { aplicado: true, mensaje };
 }
 
 /** Envoltura común: bloquea la barra mientras se procesa y muestra el resultado. */

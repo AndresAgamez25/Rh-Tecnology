@@ -84,7 +84,8 @@ async function consultar(ruta: string, token: string, init: RequestInit = {}) {
 // ── Instrucciones para Gemini ────────────────────────────────
 
 const INSTRUCCIONES = `Eres el asistente de inventario de RH TECNOLOGY, una tienda de celulares y accesorios en Corozal, Sucre (Colombia).
-Un empleado o jefe te dice qué productos FALTAN, cuáles LLEGARON o si la lista se actualizó. Tu trabajo es convertir el mensaje en acciones sobre la lista de faltantes.
+Un empleado o jefe te dice qué productos FALTAN. Tu trabajo es convertir el mensaje en productos para AGREGAR a la lista de faltantes.
+MUY IMPORTANTE: por voz, texto o foto SOLO se agrega. NUNCA quites ni borres nada de la lista (eso se hace con los botones de la app).
 
 CATEGORÍAS (usa exactamente estos ids):
 - celulares → los EQUIPOS (teléfonos) que vende la tienda. subtipo = marca: "samsung" | "xiaomi" (incluye Redmi y Poco) | "motorola" | "apple" (iPhone) | "tecno" | "infinix" | "honor" | "otras". "modelo" = marca + modelo oficial (ej. "Redmi 13C", "Samsung Galaxy A15", "iPhone 13"). "detalle" = almacenamiento y RAM con este formato exacto: "128 GB · 6 GB RAM" (solo lo que se diga; "4+128" significa 4 GB de RAM y 128 GB de almacenamiento; "gigas" = GB). El color o colores que quedan van en "quedan".
@@ -100,11 +101,11 @@ Sinónimos: mica/templado/cristal/glass/hidrogel/protector de pantalla o de cám
 
 REGLAS:
 1. "No hay / falta / se acabó / se necesita / hay que pedir X" → {"tipo":"agregar", ...}. "modelo" = modelo del celular (ej. "Redmi A7 Pro", "Galaxy A15", "iPhone 13") o nombre del producto si no es para un celular. Si dice "quedan ..." (colores o cantidades que aún hay), ponlo en "quedan" (ej. "azul y negro").
-2. "Ya llegó / se compró / ya hay X" → {"tipo":"quitar","id":"<id>"} usando el id EXACTO de la LISTA ACTUAL que mejor coincida. Si no hay ninguno que coincida, no inventes ids: menciónalo en "respuesta".
-3. "Ya se actualizó", "ya se surtió todo", "borrar todo", "lista nueva" → {"tipo":"vaciar"}. Si en el mismo mensaje dice lo que sigue faltando, primero "vaciar" y luego los "agregar".
+2. Si dice que algo LLEGÓ, que ya hay, o que se borre o vacíe la lista: NO hagas ninguna acción para eso; en "respuesta" dile que para quitar toque "✓ Llegó" en el producto (o "Reiniciar lista" para borrar todo). Si en el mismo mensaje también dice algo que falta, eso sí agrégalo.
+3. Productos con distinta capacidad, RAM, color, tipo o detalle son productos DIFERENTES: "Redmi 17 de 256 GB" y "Redmi 17 de 128 GB" son dos productos distintos y se agregan los dos. Nunca uses uno para reemplazar o cambiar otro.
 4. Un mensaje puede traer varios productos: una acción por producto.
 5. Corrige nombres de modelos mal dichos o mal escritos cuando sea obvio ("redmi a siete pro" → "Redmi A7 Pro", "ai fon 13" → "iPhone 13", "galaxi a quince" → "Galaxy A15"). Usa la escritura oficial de la marca.
-6. Si el producto ya está en la lista igual, no lo dupliques; si cambia "quedan", quita el viejo y agrega el nuevo.
+6. Si el producto ya está en la lista EXACTAMENTE igual (mismo modelo y mismo detalle), igual devuélvelo como "agregar" con el "quedan" nuevo: la app no lo repite y solo actualiza lo que queda.
 7. AUDIO: transcribe lo que dice en "transcripcion" y aplica las mismas reglas.
 8. FOTO: identifica el producto (tipo, y modelo del celular si se ve en la caja o etiqueta) y agrégalo como faltante, salvo que el texto acompañante diga otra cosa.
 9. Si el mensaje no tiene nada que ver con productos, no devuelvas acciones y explica en "respuesta".
@@ -121,16 +122,15 @@ const ESQUEMA = {
         // TODOS los campos son obligatorios (vacíos "" si no aplican):
         // así los modelos rápidos no "olvidan" el modelo o el quedan.
         properties: {
-          tipo: { type: 'STRING', enum: ['agregar', 'quitar', 'vaciar'] },
-          id: { type: 'STRING', description: 'Solo para quitar: id exacto de la lista. Si no, ""' },
-          categoria: { type: 'STRING', description: `Una de: ${Object.keys(SUBTIPOS).join(', ')}. Para quitar/vaciar: ""` },
+          tipo: { type: 'STRING', enum: ['agregar'] },
+          categoria: { type: 'STRING', description: `Una de: ${Object.keys(SUBTIPOS).join(', ')}` },
           subtipo: { type: 'STRING', description: 'Subtipo válido de la categoría o "" si no aplica' },
           modelo: { type: 'STRING', description: 'Modelo del celular o nombre del producto, con la escritura oficial de la marca' },
           detalle: { type: 'STRING', description: 'Detalles técnicos o ""' },
           quedan: { type: 'STRING', description: 'Colores o cantidades que aún quedan, o ""' },
         },
-        required: ['tipo', 'id', 'categoria', 'subtipo', 'modelo', 'detalle', 'quedan'],
-        propertyOrdering: ['tipo', 'id', 'categoria', 'subtipo', 'modelo', 'detalle', 'quedan'],
+        required: ['tipo', 'categoria', 'subtipo', 'modelo', 'detalle', 'quedan'],
+        propertyOrdering: ['tipo', 'categoria', 'subtipo', 'modelo', 'detalle', 'quedan'],
       },
     },
     respuesta: { type: 'STRING' },
@@ -243,19 +243,14 @@ const texto = (v: unknown, max: number) =>
   typeof v === 'string' ? v.replace(/[<>]/g, '').trim().slice(0, max) : '';
 
 function validarAcciones(crudas: unknown, lista: Item[]) {
-  const ids = new Set(lista.map((it) => it.id));
   const acciones: Record<string, unknown>[] = [];
   if (!Array.isArray(crudas)) return acciones;
 
   for (const a of crudas.slice(0, MAX_ACCIONES)) {
     if (!a || typeof a !== 'object') continue;
     const { tipo } = a as Record<string, unknown>;
-    if (tipo === 'vaciar') {
-      acciones.push({ tipo: 'vaciar' });
-    } else if (tipo === 'quitar') {
-      const id = String((a as Record<string, unknown>).id ?? '');
-      if (ids.has(id)) acciones.push({ tipo: 'quitar', id });
-    } else if (tipo === 'agregar') {
+    // Por voz/texto/foto SOLO se agrega: "quitar" y "vaciar" se ignoran siempre
+    if (tipo === 'agregar') {
       const x = a as Record<string, unknown>;
       const categoria = Object.hasOwn(SUBTIPOS, String(x.categoria)) ? String(x.categoria) : 'otros';
       const subtipo = SUBTIPOS[categoria].includes(String(x.subtipo)) ? String(x.subtipo) : null;

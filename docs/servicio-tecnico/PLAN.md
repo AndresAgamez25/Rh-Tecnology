@@ -52,6 +52,12 @@ Búsqueda por nombre, teléfono, IMEI o número de orden.
   sencilla (logo, "Lo que encontramos" con fotos, "Lo que se hizo" con fotos y pasos, total/abono/saldo).
   Se elige qué fotos ve el cliente. La página no muestra claves ni otros datos y deja de funcionar en
   1 mes. Botón extra "Compartir las fotos sueltas" (menú de compartir del celular → WhatsApp Business).
+- **Enlace del cliente (decidido: gratis en GitHub Pages)**:
+  `https://andresagamez25.github.io/Rh-Tecnology/orden.html?c=<código secreto por orden>`.
+  Página pública sin login; pide a Supabase (función con el código) SOLO lo permitido: equipo, lo que se
+  encontró, lo que se hizo, fotos elegidas y saldo. Nunca claves, IMEI ni otros clientes. Vista previa
+  en WhatsApp con logo (etiquetas Open Graph). El código deja de funcionar al mes (cuando se borran las
+  fotos). Si más adelante compran dominio propio (ej. rhtecnology.com), se conecta sin cambiar nada más.
 - Nota técnica: abrir WhatsApp con el mensaje escrito (opción 1) no permite adjuntar archivos; por eso
   el enlace. Fotos reducidas (~100-150 KB) para que 1 GB gratis alcance con margen.
 

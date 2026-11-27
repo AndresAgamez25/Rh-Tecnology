@@ -222,73 +222,74 @@ export function dibujarLista(contenedor, items, activa, { onLlego, onCompras, in
 }
 
 // ── Modo compras ─────────────────────────────────────────────
+// Las marcas (Comprado / No hay) quedan en un BORRADOR en el celular y
+// solo se guardan en la base al tocar "Guardar cambios".
 
 /**
- * Clasifica los productos para el Modo compras.
- * "inicio" = cuándo empezó esta salida de compras: un "no se consiguió"
- * de una salida ANTERIOR vuelve a "Por comprar" (con su nota).
+ * Estado GUARDADO de un producto para esta salida de compras.
+ * "inicio" = cuándo empezó la salida: un "no hay" de una salida ANTERIOR
+ * cuenta como pendiente (vuelve a buscarse), con su nota.
  */
-export function agruparCompras(items, inicio) {
-  const deHoy = (it) => it.estado_en && new Date(it.estado_en).getTime() >= inicio;
-  return {
-    porComprar: items.filter((it) => it.estado === 'pendiente' || (it.estado === 'no_conseguido' && !deHoy(it))),
-    enCarrito: items.filter((it) => it.estado === 'comprado'),
-    noHayHoy: items.filter((it) => it.estado === 'no_conseguido' && deHoy(it)),
-  };
+export function estadoGuardado(item, inicio) {
+  if (item.estado === 'comprado') return 'comprado';
+  if (item.estado === 'no_conseguido' && item.estado_en && new Date(item.estado_en).getTime() >= inicio) {
+    return 'no_conseguido';
+  }
+  return 'pendiente';
 }
 
-function tarjetaCompra(item, { onComprado, onNoHay }) {
-  const nodo = el('li', { class: claseTarjeta(item, 'tarjeta-compra'), 'data-id': item.id },
-    infoTarjeta(item),
+/** Cuenta comprados / no hay / pendientes, teniendo en cuenta el borrador. */
+export function resumenCompras(items, inicio, borrador = {}) {
+  const r = { comprado: 0, no_conseguido: 0, pendiente: 0 };
+  for (const it of items) r[borrador[it.id] ?? estadoGuardado(it, inicio)] += 1;
+  return r;
+}
+
+function tarjetaCompra(item, { actual, sinGuardar, noHabiaAntes }, onMarcar) {
+  const clases = ['tarjeta-compra', actual === 'comprado' && 'marca-comprado',
+    actual === 'no_conseguido' && 'marca-no-hay', sinGuardar && 'sin-guardar'].filter(Boolean).join(' ');
+  const titulo = tituloDe(item);
+  return el('li', { class: claseTarjeta(item, clases), 'data-id': item.id },
+    infoTarjeta(item, { mostrarEstado: false }),
+    noHabiaAntes ? el('span', { class: 'etiqueta etiqueta-no-hay', text: '✗ La vez pasada no se consiguió' }) : null,
+    sinGuardar ? el('span', { class: 'etiqueta etiqueta-sin-guardar', text: '● Sin guardar' }) : null,
     el('div', { class: 'botones-compra' },
       el('button', {
         type: 'button', class: 'btn-comprado',
-        'aria-label': `${tituloDe(item)}: comprado`,
-        onclick: () => onComprado(item, nodo),
+        'aria-pressed': String(actual === 'comprado'),
+        'aria-label': `${titulo}: comprado${actual === 'comprado' ? ' (toca para desmarcar)' : ''}`,
+        onclick: () => onMarcar(item, 'comprado'),
       }, '✓ Comprado'),
       el('button', {
         type: 'button', class: 'btn-no-hay',
-        'aria-label': `${tituloDe(item)}: no se consiguió`,
-        onclick: () => onNoHay(item, nodo),
+        'aria-pressed': String(actual === 'no_conseguido'),
+        'aria-label': `${titulo}: no hay${actual === 'no_conseguido' ? ' (toca para desmarcar)' : ''}`,
+        onclick: () => onMarcar(item, 'no_conseguido'),
       }, '✗ No hay'),
     ),
   );
-  return nodo;
 }
 
-function tarjetaResuelta(item, { onDeshacer }) {
-  return el('li', { class: claseTarjeta(item, 'tarjeta-resuelta'), 'data-id': item.id },
-    infoTarjeta(item, { mostrarEstado: false }),
-    el('button', {
-      type: 'button', class: 'btn-deshacer',
-      'aria-label': `Deshacer ${tituloDe(item)}`,
-      onclick: () => onDeshacer(item),
-    }, 'Deshacer'),
-  );
-}
-
-export function dibujarCompras(contenedor, items, inicio, acciones) {
+export function dibujarCompras(contenedor, items, inicio, { borrador, onMarcar }) {
   marcarPrimerDibujo(items);
-  const { porComprar, enCarrito, noHayHoy } = agruparCompras(items, inicio);
-  const nodos = [];
-
-  if (porComprar.length) {
-    nodos.push(...seccionesPorCategoria(porComprar, (it) => tarjetaCompra(it, acciones)));
-  } else {
-    nodos.push(el('div', { class: 'vacio-estado vacio-compras' },
-      el('div', { class: 'vacio-icono', 'aria-hidden': 'true', text: items.length ? '✅' : '🎉' }),
-      el('h2', { class: 'vacio-titulo', text: items.length ? '¡Revisaste todo!' : 'No hay nada por comprar' }),
-      el('p', { class: 'vacio-texto', text: items.length ? 'Toca "Terminar" arriba para cerrar la compra.' : 'La lista de faltantes está vacía.' }),
+  if (!items.length) {
+    contenedor.replaceChildren(el('div', { class: 'vacio-estado vacio-compras' },
+      el('div', { class: 'vacio-icono', 'aria-hidden': 'true', text: '🎉' }),
+      el('h2', { class: 'vacio-titulo', text: 'No hay nada por comprar' }),
+      el('p', { class: 'vacio-texto', text: 'La lista de faltantes está vacía.' }),
     ));
+    return;
   }
-
-  const resumen = (titulo, clase, lista) => lista.length && el('section', { class: `seccion seccion-resuelta ${clase}` },
-    el('h2', { class: 'seccion-titulo' }, titulo, el('span', { class: 'contador', text: String(lista.length) })),
-    el('ul', { class: 'tarjetas' }, ...lista.map((it) => tarjetaResuelta(it, acciones))),
-  );
-  nodos.push(resumen('🛒 En el carrito', 'resuelta-carrito', enCarrito));
-  nodos.push(resumen('✗ No se consiguió hoy', 'resuelta-no-hay', noHayHoy));
-  contenedor.replaceChildren(...nodos.filter(Boolean));
+  const crear = (it) => {
+    const guardado = estadoGuardado(it, inicio);
+    const actual = borrador[it.id] ?? guardado;
+    return tarjetaCompra(it, {
+      actual,
+      sinGuardar: it.id in borrador,
+      noHabiaAntes: it.estado === 'no_conseguido' && guardado === 'pendiente',
+    }, onMarcar);
+  };
+  contenedor.replaceChildren(...seccionesPorCategoria(items, crear));
 }
 
 // ── Modal de confirmación ────────────────────────────────────

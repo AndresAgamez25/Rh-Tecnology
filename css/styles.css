@@ -376,7 +376,7 @@ body[data-modo="compras"] .encabezado-lista,
 body[data-modo="compras"] .pestanas,
 body[data-modo="compras"] .barra { display: none; }
 body[data-modo="compras"] .encabezado-compras { display: flex; }
-body[data-modo="compras"] .lista { padding-bottom: calc(32px + var(--seguro-abajo)); }
+body[data-modo="compras"] .lista { padding-bottom: calc(96px + var(--seguro-abajo)); }
 
 .compras-titulo { min-width: 0; }
 .encabezado-compras .btn-principal { padding: 10px 18px; font-size: 15px; }
@@ -404,8 +404,37 @@ body[data-modo="compras"] .lista { padding-bottom: calc(32px + var(--seguro-abaj
   font-weight: 700;
   font-size: 15px;
 }
-.btn-comprado { border: 0; background: var(--exito); color: #04261a; }
+.btn-comprado { border: 1px solid rgb(52 211 153 / 0.5); background: transparent; color: var(--exito); }
 .btn-no-hay { border: 1px solid rgb(248 113 113 / 0.5); background: transparent; color: var(--peligro); }
+/* Botón marcado (aria-pressed): relleno. Tocar de nuevo lo desmarca */
+.btn-comprado[aria-pressed="true"] { background: var(--exito); border-color: var(--exito); color: #04261a; }
+.btn-no-hay[aria-pressed="true"] { background: var(--peligro); border-color: var(--peligro); color: #1a0505; }
+.tarjeta.marca-comprado { border-color: rgb(52 211 153 / 0.6); background: rgb(52 211 153 / 0.07); }
+.tarjeta.marca-no-hay { border-color: rgb(248 113 113 / 0.6); background: rgb(248 113 113 / 0.07); }
+.etiqueta-sin-guardar {
+  display: inline-block; margin: 0 0 4px; padding: 2px 8px; border-radius: 6px;
+  background: rgb(61 139 253 / 0.15); color: var(--acento); font-size: 12px; font-weight: 700;
+}
+.tarjeta-compra > .etiqueta { margin-left: 0; }
+
+/* Barra inferior del Modo compras con "Guardar cambios" */
+.barra-compras { display: none; }
+body[data-modo="compras"] .barra-compras {
+  position: fixed;
+  left: 0; right: 0; bottom: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px calc(16px + var(--seguro-der)) calc(10px + var(--seguro-abajo)) calc(16px + var(--seguro-izq));
+  border-top: 1px solid var(--borde);
+  background: rgb(20 24 33 / 0.95);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+}
+.barra-compras-texto { flex: 1; color: var(--texto-suave); font-size: 14px; }
+.btn-exito { background: var(--exito); color: #04261a; padding: 12px 20px; font-size: 15px; }
+.btn-exito:disabled { background: var(--superficie-2); color: var(--texto-suave); }
 .btn-comprado:active, .btn-no-hay:active { transform: scale(0.97); }
 
 .seccion-resuelta .tarjeta { opacity: 0.75; }

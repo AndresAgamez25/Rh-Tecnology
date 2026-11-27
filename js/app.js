@@ -46,6 +46,8 @@ const elementos = {
   errorLogin: $('login-error'),
   btnLogin: $('btn-login'),
   terminar: $('btn-terminar'),
+  guardarCompras: $('btn-guardar-compras'),
+  sinGuardar: $('compras-sin-guardar'),
   progreso: $('compras-progreso'),
   cancelarAudio: $('btn-cancelar-audio'),
   fotoBoton: $('btn-foto'),
@@ -62,6 +64,9 @@ const estado = {
   grabacion: null,   // grabación de audio en curso
   // Modo compras: momento en que empezó la salida (null = no estamos comprando)
   comprasDesde: leerCompras(),
+  // Marcas aún no guardadas: { idProducto: 'comprado' | 'no_conseguido' | 'pendiente' }
+  borrador: leerBorrador(),
+  guardando: false,
 };
 
 // ── Render ───────────────────────────────────────────────────
@@ -81,17 +86,24 @@ function render() {
 }
 
 function renderCompras() {
-  const { porComprar, enCarrito, noHayHoy } = ui.agruparCompras(estado.items, estado.comprasDesde);
-  const revisados = enCarrito.length + noHayHoy.length;
-  const total = revisados + porComprar.length;
+  limpiarBorrador();
+  const r = ui.resumenCompras(estado.items, estado.comprasDesde, estado.borrador);
+  const total = r.comprado + r.no_conseguido + r.pendiente;
   elementos.progreso.textContent = total
-    ? `${enCarrito.length} comprados · ${noHayHoy.length} no había · ${porComprar.length} por revisar`
+    ? `${r.comprado} comprados · ${r.no_conseguido} no había · ${r.pendiente} por revisar`
     : 'Nada por comprar';
-  elementos.barraProgreso.style.width = `${total ? Math.round((revisados / total) * 100) : 0}%`;
+  elementos.barraProgreso.style.width = `${total ? Math.round(((total - r.pendiente) / total) * 100) : 0}%`;
+
+  const cambios = Object.keys(estado.borrador).length;
+  elementos.guardarCompras.disabled = cambios === 0 || estado.guardando;
+  elementos.guardarCompras.textContent = estado.guardando ? 'Guardando…' : 'Guardar cambios';
+  elementos.sinGuardar.textContent = cambios
+    ? `${cambios} ${cambios === 1 ? 'cambio' : 'cambios'} sin guardar`
+    : 'Todo guardado ✓';
+
   ui.dibujarCompras(elementos.lista, estado.items, estado.comprasDesde, {
-    onComprado: (item, nodo) => marcarEstado(item, 'comprado', nodo),
-    onNoHay: (item, nodo) => marcarEstado(item, 'no_conseguido', nodo),
-    onDeshacer: (item) => marcarEstado(item, 'pendiente'),
+    borrador: estado.borrador,
+    onMarcar: marcarEnBorrador,
   });
 }
 
@@ -125,13 +137,23 @@ function entrarACompras() {
 }
 
 async function terminarCompras() {
-  const { porComprar, enCarrito, noHayHoy } = ui.agruparCompras(estado.items, estado.comprasDesde);
+  const pendientes = Object.keys(estado.borrador).length;
+  if (pendientes) {
+    const guardar = await ui.confirmar({
+      titulo: 'Tienes cambios sin guardar',
+      mensaje: `Hay ${pendientes} ${pendientes === 1 ? 'marca' : 'marcas'} sin guardar. ¿Guardarlas antes de terminar?`,
+      textoAceptar: 'Guardar',
+      peligro: false,
+    });
+    if (!guardar || !(await guardarCambiosCompras())) return;
+  }
+  const r = ui.resumenCompras(estado.items, estado.comprasDesde);
   const partes = [
-    `Compraste ${enCarrito.length}.`,
-    noHayHoy.length === 1 ? '1 no se consiguió: sigue en la lista para la próxima vez.' : '',
-    noHayHoy.length > 1 ? `${noHayHoy.length} no se consiguieron: siguen en la lista para la próxima vez.` : '',
-    porComprar.length === 1 ? '1 quedó sin revisar.' : '',
-    porComprar.length > 1 ? `${porComprar.length} quedaron sin revisar.` : '',
+    `Compraste ${r.comprado}.`,
+    r.no_conseguido === 1 ? '1 no se consiguió: sigue en la lista para la próxima vez.' : '',
+    r.no_conseguido > 1 ? `${r.no_conseguido} no se consiguieron: siguen en la lista para la próxima vez.` : '',
+    r.pendiente === 1 ? '1 quedó sin revisar.' : '',
+    r.pendiente > 1 ? `${r.pendiente} quedaron sin revisar.` : '',
   ];
   const ok = await ui.confirmar({
     titulo: '¿Terminar las compras?',
@@ -147,18 +169,66 @@ async function terminarCompras() {
   ui.toast('Compras terminadas. Lo comprado sale como "🛒 Comprado" hasta que llegue.', 4500);
 }
 
-async function marcarEstado(item, nuevoEstado, nodo) {
-  if (nodo) {
-    nodo.classList.add('saliendo');
-    await new Promise((r) => setTimeout(r, 200));
+// ── Borrador del Modo compras ────────────────────────────────
+
+function leerBorrador() {
+  try { return JSON.parse(localStorage.getItem('rh-compras-borrador') || '{}') || {}; } catch { return {}; }
+}
+
+function guardarBorradorLocal() {
+  try { localStorage.setItem('rh-compras-borrador', JSON.stringify(estado.borrador)); } catch { /* sin almacenamiento */ }
+}
+
+/** Quita del borrador productos que ya no existen o que ya coinciden con lo guardado. */
+function limpiarBorrador() {
+  const porId = new Map(estado.items.map((it) => [it.id, it]));
+  let cambio = false;
+  for (const [id, valor] of Object.entries(estado.borrador)) {
+    const item = porId.get(id);
+    if (!item || valor === ui.estadoGuardado(item, estado.comprasDesde)) {
+      delete estado.borrador[id];
+      cambio = true;
+    }
   }
+  if (cambio) guardarBorradorLocal();
+}
+
+/**
+ * Tocar "Comprado" o "No hay" marca la tarjeta; tocar el MISMO botón otra
+ * vez la desmarca. Nada va a la base hasta "Guardar cambios".
+ */
+function marcarEnBorrador(item, tocado) {
+  const guardado = ui.estadoGuardado(item, estado.comprasDesde);
+  const actual = estado.borrador[item.id] ?? guardado;
+  const nuevo = actual === tocado ? 'pendiente' : tocado;
+  if (nuevo === guardado) delete estado.borrador[item.id];
+  else estado.borrador[item.id] = nuevo;
+  guardarBorradorLocal();
+  render();
+}
+
+async function guardarCambiosCompras() {
+  const cambios = Object.entries(estado.borrador);
+  if (!cambios.length || estado.guardando) return true;
+  estado.guardando = true;
+  render();
   try {
-    await datos.actualizarEstado([item.id], nuevoEstado);
-    if (nuevoEstado === 'no_conseguido') ui.toast(`${item.modelo || 'Producto'}: vuelve a la lista para la próxima`);
+    // Un envío por cada estado (máximo 3)
+    for (const valor of ['comprado', 'no_conseguido', 'pendiente']) {
+      const ids = cambios.filter(([, v]) => v === valor).map(([id]) => id);
+      if (ids.length) await datos.actualizarEstado(ids, valor);
+    }
+    estado.borrador = {};
+    guardarBorradorLocal();
+    ui.toast(`✅ ${cambios.length} ${cambios.length === 1 ? 'cambio guardado' : 'cambios guardados'}`);
+    return true;
   } catch (error) {
     console.error(error);
-    nodo?.classList.remove('saliendo');
-    ui.toast('No se pudo guardar. Revisa tu conexión.');
+    ui.toast('No se pudo guardar. Revisa tu conexión e intenta de nuevo.');
+    return false;
+  } finally {
+    estado.guardando = false;
+    render();
   }
 }
 
@@ -265,6 +335,13 @@ async function enviar(evento) {
 }
 
 async function marcarLlego(item, nodo) {
+  const ok = await ui.confirmar({
+    titulo: `¿Llegó ${item.modelo || 'este producto'}?`,
+    mensaje: 'Se quitará de la lista de faltantes para todos.',
+    textoAceptar: 'Sí, llegó',
+    peligro: false,
+  });
+  if (!ok) return;
   nodo.classList.add('saliendo');
   // Esperamos la animación antes de quitarlo
   await new Promise((r) => setTimeout(r, 220));
@@ -318,6 +395,7 @@ elementos.texto.addEventListener('keydown', (e) => {
 elementos.barra.addEventListener('submit', enviar);
 elementos.reiniciar.addEventListener('click', reiniciarLista);
 elementos.terminar.addEventListener('click', terminarCompras);
+elementos.guardarCompras.addEventListener('click', guardarCambiosCompras);
 
 // ── Audio ────────────────────────────────────────────────────
 

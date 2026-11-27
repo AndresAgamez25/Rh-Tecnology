@@ -196,20 +196,20 @@ begin
 end;
 $$;
 
--- Al cambiar el estado, el servidor anota quién y cuándo
+-- Cada vez que se marca un estado (aunque sea el mismo, p. ej. "no hay"
+-- otra vez en una compra nueva), el servidor anota quién y cuándo.
+-- La app solo puede actualizar "estado", así que todo UPDATE es una marca.
 create or replace function public.poner_estado()
 returns trigger
 language plpgsql security definer
 set search_path = ''
 as $$
 begin
-  if new.estado is distinct from old.estado then
-    new.estado_por := coalesce(
-      (select nombre from public.usuarios_permitidos where email = lower(auth.jwt() ->> 'email')),
-      'Desconocido'
-    );
-    new.estado_en := now();
-  end if;
+  new.estado_por := coalesce(
+    (select nombre from public.usuarios_permitidos where email = lower(auth.jwt() ->> 'email')),
+    'Desconocido'
+  );
+  new.estado_en := now();
   return new;
 end;
 $$;

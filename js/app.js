@@ -491,3 +491,11 @@ async function iniciar() {
 }
 
 iniciar();
+
+// ── PWA: registrar el service worker ─────────────────────────
+// Solo funciona en HTTPS (GitHub Pages) o en localhost.
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('./sw.js').catch((error) => console.warn('Service worker:', error));
+  });
+}

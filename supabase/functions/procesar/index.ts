@@ -163,7 +163,10 @@ async function preguntarAGemini(mensaje: string, audio: Archivo | null, imagen: 
   if (audio) partes.push({ text: 'AUDIO del usuario:' }, { inline_data: { mime_type: audio.mime, data: audio.base64 } });
   if (imagen) partes.push({ text: 'FOTO del producto:' }, { inline_data: { mime_type: imagen.mime, data: imagen.base64 } });
 
-  const r = await fetch(
+  // Sin "pensar": para clasificar productos no hace falta razonar, y
+  // pensar agrega varios segundos. Si el modelo no acepta ese ajuste
+  // (algunos no permiten apagarlo), reintentamos sin él.
+  const pedir = (sinPensar: boolean) => fetch(
     `${GEMINI_BASE}/v1beta/models/${GEMINI_MODEL}:generateContent`,
     {
       method: 'POST',
@@ -175,11 +178,18 @@ async function preguntarAGemini(mensaje: string, audio: Archivo | null, imagen: 
           temperature: 0.1,
           responseMimeType: 'application/json',
           responseSchema: ESQUEMA,
+          ...(sinPensar && { thinkingConfig: { thinkingBudget: 0 } }),
         },
       }),
       signal: AbortSignal.timeout(25_000),
     },
   );
+
+  let r = await pedir(true);
+  if (r.status === 400) {
+    console.warn('Gemini rechazó thinkingBudget=0, reintento sin él:', (await r.text()).slice(0, 200));
+    r = await pedir(false);
+  }
   if (!r.ok) {
     console.error('Gemini', r.status, (await r.text()).slice(0, 500));
     throw new Error(`Gemini ${r.status}`);
@@ -219,23 +229,28 @@ Deno.serve(async (req) => {
   if (!mensaje && !audio && !imagen) return responder({ error: 'Mensaje vacío' }, 400);
 
   try {
-    // 1) ¿Usuario permitido? (mi_perfil solo devuelve nombre si está en la lista)
-    const perfil = await consultar('rpc/mi_perfil', token, { method: 'POST', body: '{}' });
+    const inicio = Date.now();
+    // 1) y 2) AL MISMO TIEMPO: ¿usuario permitido? + lista actual (leída con RLS)
+    const [perfil, lista] = await Promise.all([
+      consultar('rpc/mi_perfil', token, { method: 'POST', body: '{}' }),
+      consultar(
+        'faltantes?select=id,categoria,subtipo,modelo,detalle,quedan,estado&order=creado_en.desc&limit=300',
+        token,
+      ) as Promise<Item[]>,
+    ]);
     if (!Array.isArray(perfil) || !perfil.length) return responder({ error: 'Sin permiso' }, 403);
     if (!GEMINI_API_KEY) return responder({ error: 'Falta configurar GEMINI_API_KEY' }, 500);
-
-    // 2) Lista actual, leída con RLS
-    const lista: Item[] = await consultar(
-      'faltantes?select=id,categoria,subtipo,modelo,detalle,quedan,estado&order=creado_en.desc&limit=300',
-      token,
-    );
+    const msBase = Date.now() - inicio;
 
     // 3) Gemini
     const resultado = await preguntarAGemini(mensaje, audio, imagen, lista);
+    const msIA = Date.now() - inicio - msBase;
+    console.log(`tiempos: base ${msBase} ms · gemini ${msIA} ms`);
     return responder({
       acciones: validarAcciones(resultado?.acciones, lista),
       respuesta: texto(resultado?.respuesta, 200) || 'Listo.',
       transcripcion: texto(resultado?.transcripcion, MAX_TEXTO),
+      tiempos: { base: msBase, ia: msIA },
     });
   } catch (error) {
     const status = (error as { status?: number }).status;

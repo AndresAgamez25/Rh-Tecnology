@@ -205,7 +205,10 @@ async function aplicarAcciones(acciones) {
 async function interpretar(entrada) {
   if (estado.modo === 'supabase') {
     try {
-      return { ...(await procesarConIA(entrada)), conIA: true };
+      const inicio = performance.now();
+      const r = await procesarConIA(entrada);
+      log(`IA: ${Math.round(performance.now() - inicio)} ms en total`, r.tiempos ?? '');
+      return { ...r, conIA: true };
     } catch (error) {
       console.warn('La IA falló; uso el respaldo:', error);
       if (!entrada.texto) throw new Error('sin-respaldo');
@@ -230,6 +233,8 @@ async function procesarMensaje(entrada) {
 async function ejecutar(entrada, { limpiarTexto = false } = {}) {
   if (estado.enviando) return;
   ponerEnviando(true);
+  // Aviso inmediato para que se note que está trabajando
+  if (estado.modo === 'supabase') ui.toast(entrada.audio ? '🎙️ Escuchando el audio…' : entrada.imagen ? '📷 Mirando la foto…' : '⏳ Procesando…', 30_000);
   try {
     const { aplicado, mensaje } = await procesarMensaje(entrada);
     if (aplicado && limpiarTexto) {

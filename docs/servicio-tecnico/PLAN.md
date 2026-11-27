@@ -82,7 +82,7 @@ teléfono del negocio.
 ## Decisiones finales (antes de construir)
 - **Número de orden**: serial automático **interno**. El cliente **nunca** lo ve (ni en WhatsApp, ni en
   el recibo, ni en la página del cliente). Para el cliente, el enlace usa el código secreto.
-- **Horario** (va en los mensajes y en la página del cliente): lunes a sábado, 8 a. m. a 7 p. m.
+- **Horario** (va en los mensajes y en la página del cliente): lunes a sábado, 8 a. m. a 7 p. m.; domingos y festivos, 8:30 a. m. a 2 p. m.
 - **Condiciones del taller** (confirmado, opción A): cuentan desde que el equipo queda **listo**.
   Texto para el recibo, el WhatsApp al recibir y la página del cliente:
   "Pasados 30 días desde que su equipo esté listo sin reclamarlo, RH Tecnology no responde por él.

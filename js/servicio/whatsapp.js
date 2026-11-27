@@ -8,14 +8,14 @@
 export const NEGOCIO = {
   nombre: 'RH Tecnology',
   lugar: 'Corozal, Sucre',
-  horario: 'Lunes a sábado, 8 a. m. a 7 p. m.',
+  horario: 'Lunes a sábado, 8 a. m. a 7 p. m. · Domingos y festivos, 8:30 a. m. a 2 p. m.',
   condiciones: 'Pasados 30 días desde que su equipo esté listo sin reclamarlo, RH Tecnology no responde por él. '
     + 'No respondemos por la información guardada en el celular.',
 };
 
 export const pesos = (n) => `$${Number(n || 0).toLocaleString('es-CO')}`;
-const primerNombre = (nombre) => String(nombre || '').trim().split(/\s+/)[0] || '';
-const pie = () => `📍 ${NEGOCIO.nombre} · ${NEGOCIO.lugar}\n🕗 ${NEGOCIO.horario}`;
+export const primerNombre = (nombre) => String(nombre || '').trim().split(/\s+/)[0] || '';
+export const pie = () => `📍 ${NEGOCIO.nombre} · ${NEGOCIO.lugar}\n${NEGOCIO.horario.split(' · ').map((h) => `🕗 ${h}`).join('\n')}`;
 
 /** Detalle del valor: "• Pantalla: $180.000", descuento y total. */
 function lineasValor(o, titulo = 'Valor') {
@@ -105,6 +105,22 @@ export function mensajeListo(o, pasosTodos, enlace) {
     '',
     pie(),
   ].filter((l) => l !== null).filter((l, i, t) => l !== '' || (i > 0 && t[i - 1] !== '')).join('\n');
+}
+
+/** Al entregar el equipo: agradecimiento. */
+export function mensajeEntregado(o) {
+  const reparado = o.resultado !== 'no_reparado';
+  return [
+    `Hola ${primerNombre(o.cliente)} 👋, le escribe *${NEGOCIO.nombre}*.`,
+    '',
+    `✅ Su *${o.equipo || 'equipo'}* fue entregado${o.precio ? ` y el pago de *${pesos(o.precio)}* quedó completo` : ''}.`,
+    '',
+    reparado ? '¡Muchas gracias por confiar en nosotros! 🙌 Esperamos que disfrute su equipo.'
+      : '¡Muchas gracias por confiar en nosotros! 🙌 Lamentamos no haber podido repararlo esta vez.',
+    'Si necesita algo más (accesorios, repuestos o una revisión), aquí estamos para servirle.',
+    '',
+    pie(),
+  ].join('\n');
 }
 
 export function mensajeDevuelto(o, motivo) {

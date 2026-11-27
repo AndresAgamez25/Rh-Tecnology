@@ -26,7 +26,7 @@ function mostrarError(titulo, texto) {
 function pie() {
   return el('footer', { class: 'cliente-pie' },
     el('p', { text: `📍 ${NEGOCIO.nombre} · ${NEGOCIO.lugar}` }),
-    el('p', { text: `🕗 ${NEGOCIO.horario}` }),
+    ...NEGOCIO.horario.split(' · ').map((h) => el('p', { text: `🕗 ${h}` })),
     el('p', { class: 'cliente-condiciones', text: NEGOCIO.condiciones }));
 }
 

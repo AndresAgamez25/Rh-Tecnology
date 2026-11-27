@@ -11,6 +11,7 @@ import { procesarConIA, configurarIA } from './ia.js';
 import * as media from './media.js';
 import * as ui from './ui.js';
 import * as servicio from './servicio/app.js';
+import * as garantias from './garantias/app.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -58,6 +59,7 @@ const elementos = {
   barraProgreso: $('compras-barra'),
   inicio: $('inicio'),
   servicio: $('servicio'),
+  garantias: $('garantias'),
   btnInicio: $('btn-inicio'),
 };
 
@@ -98,7 +100,7 @@ const estado = {
   facturaNueva: null,
   panelRegistro: 'facturas', // 'facturas' | 'actividad'
   actividad: [],
-  // Apartado visible: 'inicio' | 'faltantes' | 'servicio'
+  // Apartado visible: 'inicio' | 'faltantes' | 'servicio' | 'garantias'
   seccion: 'inicio',
   nombre: '',
 };
@@ -111,9 +113,9 @@ function render() {
     dibujarInicio();
     return;
   }
-  if (estado.seccion === 'servicio') {
-    document.body.dataset.modo = 'servicio';
-    return; // el servicio técnico se dibuja solo (js/servicio/app.js)
+  if (estado.seccion === 'servicio' || estado.seccion === 'garantias') {
+    document.body.dataset.modo = estado.seccion;
+    return; // se dibujan solos (js/servicio/app.js y js/garantias/app.js)
   }
   const pantalla = estado.verFacturas ? 'facturas' : estado.comprasDesde ? 'compras' : 'lista';
   document.body.dataset.modo = pantalla;
@@ -151,6 +153,7 @@ function dibujarInicio() {
   const { el } = ui;
   const pendientes = estado.items.filter((it) => it.estado !== 'comprado').length;
   const { activos, porEntregar } = servicio.contar();
+  const g = garantias.contar();
   const tarjeta = (icono, titulo, linea, clase, onclick) => el('button', { type: 'button', class: `inicio-tarjeta ${clase}`, onclick },
     el('span', { class: 'inicio-icono', 'aria-hidden': 'true', text: icono }),
     el('strong', { class: 'inicio-titulo', text: titulo }),
@@ -162,17 +165,21 @@ function dibujarInicio() {
         estado.modo === 'supabase' ? el('button', { type: 'button', class: 'btn-enlace', onclick: salir }, ' · Salir') : null)),
     el('div', { class: 'inicio-tarjetas' },
       tarjeta('📋', 'Faltantes', pendientes ? `${pendientes} por comprar` : 'Todo al día', 'inicio-faltantes', () => irA('faltantes')),
-      tarjeta('🔧', 'Servicio técnico', `${activos} en el taller · ${porEntregar} por entregar`, 'inicio-servicio', () => irA('servicio'))),
+      tarjeta('🔧', 'Servicio técnico', `${activos} en el taller · ${porEntregar} por entregar`, 'inicio-servicio', () => irA('servicio')),
+      tarjeta('🛡️', 'Garantías', `${g.tramite} en trámite · ${g.respuesta} con respuesta${g.vencidas ? ` · ⚠️ ${g.vencidas} pasaron el plazo` : ''}`,
+        'inicio-garantias', () => irA('garantias'))),
   );
 }
 
 function irA(seccion) {
   if (estado.seccion === 'servicio' && seccion !== 'servicio') servicio.ocultar();
+  if (estado.seccion === 'garantias' && seccion !== 'garantias') garantias.ocultar();
   estado.seccion = seccion;
   estado.verFacturas = false;
   render();
   window.scrollTo({ top: 0 });
   if (seccion === 'servicio') servicio.mostrar();
+  else if (seccion === 'garantias') garantias.mostrar();
   else animarEntrada();
 }
 
@@ -187,17 +194,29 @@ async function prepararServicio() {
   } catch (error) {
     console.error('servicio técnico:', error);
   }
+  try {
+    await garantias.iniciarGarantias({
+      modo: estado.modo,
+      contenedor: elementos.garantias,
+      onInicio: () => irA('inicio'),
+      onCambio: () => { if (estado.seccion === 'inicio') render(); },
+    });
+  } catch (error) {
+    console.error('garantías:', error);
+  }
 }
 
 /** "Descargar copia de todo": faltantes, facturas, actividad y servicio técnico en un archivo. */
 async function descargarCopia() {
   ui.toast('⏳ Preparando la copia…');
   try {
-    const [compras, actividad, taller] = await Promise.allSettled([datos.listarCompras(), datos.listarActividad(), servicio.datosParaCopia()]);
+    const [compras, actividad, taller, garantia] = await Promise.allSettled([datos.listarCompras(), datos.listarActividad(),
+      servicio.datosParaCopia(), garantias.datosParaCopia()]);
     const valor = (r) => (r.status === 'fulfilled' ? r.value : null);
     const copia = {
       app: 'RH Tecnology', creada_en: new Date().toISOString(),
       faltantes: estado.items, facturas: valor(compras), actividad: valor(actividad), servicio_tecnico: valor(taller),
+      garantias: valor(garantia),
     };
     const blob = new Blob([JSON.stringify(copia, null, 2)], { type: 'application/json' });
     const enlace = Object.assign(document.createElement('a'), {
@@ -646,9 +665,17 @@ async function reiniciarLista() {
     ui.toast('La lista ya está vacía.');
     return;
   }
+  const n = estado.items.length;
+  const ok = await ui.confirmar({
+    titulo: '⚠️ ¿Reiniciar toda la lista?',
+    mensaje: `Se borrarán ${n === 1 ? 'el único producto' : `los ${n} productos`} de faltantes, para todos los usuarios.\n\n`
+      + 'Esto no se puede deshacer. Si solo llegó un producto, mejor toca "✓ Llegó" en ese producto.',
+    textoAceptar: `Sí, borrar ${n === 1 ? '1 producto' : `los ${n}`}`,
+  });
+  if (!ok) { ui.toast('No se borró nada.'); return; }
   try {
-    const { aplicado } = await aplicarAcciones([{ tipo: 'vaciar' }]);
-    if (aplicado) ui.toast('Lista reiniciada.');
+    await datos.vaciar();
+    ui.toast('Lista reiniciada.');
   } catch (error) {
     console.error(error);
     ui.toast('No se pudo reiniciar. Revisa tu conexión.');
@@ -833,6 +860,7 @@ async function entrar(evento) {
 async function salir() {
   estado.usuarioId = null;
   servicio.ocultar();
+  garantias.ocultar();
   estado.seccion = 'inicio';
   await datos.detener();
   await auth.cerrarSesion();

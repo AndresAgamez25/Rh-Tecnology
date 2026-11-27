@@ -989,11 +989,13 @@ body.grabando #btn-audio { animation: halo 1.2s ease-out infinite; }
 /* ═════════════════════════════════════════════════════════════
    15. INICIO (Faltantes | Servicio técnico)
    ═════════════════════════════════════════════════════════════ */
-.inicio, .servicio { display: none; }
+.inicio, .servicio, .garantias { display: none; }
 body[data-modo="inicio"] .inicio { display: block; }
 body[data-modo="servicio"] .servicio { display: block; }
+body[data-modo="garantias"] .garantias { display: block; }
 body[data-modo="inicio"] :is(.encabezado-lista, .pestanas, #lista, .barra),
-body[data-modo="servicio"] :is(.encabezado-lista, .pestanas, #lista, .barra) { display: none; }
+body[data-modo="servicio"] :is(.encabezado-lista, .pestanas, #lista, .barra),
+body[data-modo="garantias"] :is(.encabezado-lista, .pestanas, #lista, .barra) { display: none; }
 
 .inicio {
   min-height: 100dvh;
@@ -1058,7 +1060,7 @@ body[data-modo="servicio"] :is(.encabezado-lista, .pestanas, #lista, .barra) { d
 .st-dias { margin: 6px 0 0; color: var(--texto-suave); font-size: 13px; }
 .st-por-vencer { color: var(--aviso-texto); }
 .st-vencido { color: var(--peligro); font-weight: 700; }
-.st-debe { background: var(--aviso-fondo); color: var(--aviso-texto); }
+.st-debe { background: rgb(248 113 113 / 0.16); color: var(--peligro); }
 .st-candado { margin: 18px 0; color: var(--texto-suave); font-size: 13px; text-align: center; }
 .st-botones { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
 .st-botones .btn { padding: 9px 14px; font-size: 14px; }
@@ -1145,7 +1147,7 @@ body[data-modo="servicio"] :is(.encabezado-lista, .pestanas, #lista, .barra) { d
 .st-plata > div, .st-caja > div { display: grid; gap: 2px; padding: 10px 6px; border-radius: 12px; background: var(--superficie-2); }
 .st-plata small, .st-caja small { color: var(--texto-suave); font-size: 12px; }
 .st-plata b, .st-caja b { font-size: 16px; }
-.st-debe-txt { color: var(--aviso-texto); }
+.st-debe-txt { color: var(--peligro); }
 .st-ok-txt { color: var(--exito); }
 .st-pagos { display: grid; gap: 6px; margin: 10px 0 0; padding: 0; list-style: none; font-size: 13px; }
 .st-pagos li { display: flex; justify-content: space-between; gap: 8px; color: var(--texto-suave); }
@@ -1287,3 +1289,31 @@ textarea.st-input { resize: vertical; line-height: 1.4; }
 select.st-input { appearance: none; -webkit-appearance: none; padding-right: 30px;
   background: var(--superficie) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%238ea4cc' stroke-width='2' fill='none'/%3E%3C/svg%3E") no-repeat right 12px center; }
 select.st-input:disabled { opacity: 0.5; }
+
+/* ═════════════════════════════════════════════════════════════
+   18. GARANTÍAS
+   ═════════════════════════════════════════════════════════════ */
+.inicio-garantias { --c1: #a855f7; animation-delay: 0.12s; grid-column: 1 / -1; min-height: 120px; }
+.gr-subtitulo { margin: 10px 0 0; font-size: 15px; color: var(--marca-celeste); }
+.st-form-grupo { display: grid; gap: 10px; }
+.gr-en-tienda { background: rgb(31 134 255 / 0.16); color: #7cc4ff; }
+.gr-enviada { background: rgb(168 85 247 / 0.18); color: #d8b4fe; }
+.gr-plazo { display: grid; gap: 5px; margin-top: 8px; }
+.gr-plazo small { color: var(--texto-suave); font-size: 12.5px; }
+.gr-plazo-barra { height: 6px; border-radius: 99px; background: var(--superficie-2); overflow: hidden; }
+.gr-plazo-barra span { display: block; height: 100%; border-radius: inherit; background: var(--degradado); }
+.gr-plazo.st-por-vencer small { color: var(--aviso-texto); }
+.gr-plazo.st-por-vencer .gr-plazo-barra span { background: #f5b300; }
+.gr-plazo.st-vencido small { color: var(--peligro); font-weight: 700; }
+.gr-plazo.st-vencido .gr-plazo-barra span { background: var(--peligro); }
+.gr-aviso {
+  display: grid; gap: 6px; padding: 12px 14px;
+  border: 1px solid rgb(168 85 247 / 0.45); border-radius: 14px; background: rgb(168 85 247 / 0.1);
+  font-size: 14px;
+}
+.gr-aviso span { color: var(--texto-suave); font-size: 13px; }
+.gr-fecha-max { display: grid; gap: 2px; margin: 4px 0; }
+.gr-fecha-max small { color: var(--texto-suave); font-size: 12px; }
+.gr-fecha-max b { font-size: 17px; color: var(--texto); }
+.gr-fecha-max b::first-letter { text-transform: uppercase; }
+.gr-aviso-plazo { border-color: rgb(168 85 247 / 0.45); }

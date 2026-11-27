@@ -8,6 +8,7 @@
 import { el, toast, confirmar } from '../ui.js';
 import * as datos from './datos.js';
 import { abrirHoja } from './hoja.js';
+import { seccion, campoTexto, botonesHoja, selectorUnico, selectorVarios } from './formulario.js';
 import { dibujoPatron, crearEditorPatron } from '../patron.js';
 import * as wa from './whatsapp.js';
 import { prepararFoto, puedeGrabar, empezarGrabacion } from '../media.js';
@@ -254,9 +255,6 @@ function volverALista() {
   render();
 }
 
-function seccion(titulo, ...hijos) {
-  return el('section', { class: 'tarjeta st-seccion' }, el('h4', { class: 'st-seccion-titulo', text: titulo }), ...hijos);
-}
 
 function vistaFicha({ orden: o, eventos, pagos, fotos }) {
   const entregado = o.estado === 'entregado';
@@ -401,17 +399,7 @@ async function trabajar(promesa, exito) {
   }
 }
 
-function campoTexto(etiqueta, props = {}) {
-  const entrada = el(props.multilinea ? 'textarea' : 'input', { class: 'st-input', rows: props.multilinea ? 3 : null, ...props, multilinea: null });
-  if (props.value != null) entrada.value = String(props.value); // <textarea> no usa el atributo value
-  return { nodo: el('label', { class: 'campo' }, el('span', { text: etiqueta }), entrada), entrada };
-}
 
-function botonesHoja(cerrar, textoOk, alOk, clase = 'btn-principal') {
-  return el('div', { class: 'st-botones st-hoja-botones' },
-    el('button', { type: 'button', class: 'btn btn-secundario', onclick: () => cerrar(null) }, 'Cancelar'),
-    el('button', { type: 'button', class: `btn ${clase}`, onclick: alOk }, textoOk));
-}
 
 async function agregarTexto(o, tipo) {
   const texto = await abrirHoja(tipo === 'nota' ? '📝 Agregar nota' : '📝 Agregar trabajo', (cerrar) => {
@@ -458,26 +446,7 @@ async function registrarAbono(o) {
   if (r?.monto > 0) await trabajar(datos.registrarAbono(o.id, r.monto, r.metodo), '💵 Abono registrado');
 }
 
-function selectorUnico(opciones, actual, alCambiar) {
-  const caja = el('div', { class: 'st-chips' });
-  const pintar = (valor) => caja.replaceChildren(...opciones.map(([v, t]) => el('button', {
-    type: 'button', class: `st-chip ${v === valor ? 'on' : ''}`, 'aria-pressed': String(v === valor),
-    onclick: () => { alCambiar(v); pintar(v); },
-  }, t)));
-  pintar(actual);
-  return caja;
-}
 
-function selectorVarios(opciones, actuales, alCambiar) {
-  const sel = new Set(actuales);
-  const caja = el('div', { class: 'st-chips' });
-  const pintar = () => caja.replaceChildren(...opciones.map((v) => el('button', {
-    type: 'button', class: `st-chip ${sel.has(v) ? 'on' : ''}`, 'aria-pressed': String(sel.has(v)),
-    onclick: () => { sel.has(v) ? sel.delete(v) : sel.add(v); alCambiar([...sel]); pintar(); },
-  }, v)));
-  pintar();
-  return caja;
-}
 
 async function agregarFoto(o, archivo) {
   let blob;
@@ -677,6 +646,14 @@ async function cobrarYEntregar(o) {
   if (n) {
     est.tab = 'entregado';
     volverALista();
+    if (o.telefono) {
+      const enviar = await confirmar({ titulo: '🙌 ¿Enviar agradecimiento?', mensaje: 'Se abre WhatsApp Business con un mensaje de "equipo entregado, muchas gracias".',
+        textoAceptar: '💬 Enviar', peligro: false });
+      if (enviar) {
+        wa.abrirWhatsApp(o.telefono, wa.mensajeEntregado({ ...o, ...n }));
+        datos.agregarEvento(o.id, 'whatsapp', 'Se envió el agradecimiento de entrega por WhatsApp.').catch(() => {});
+      }
+    }
   }
 }
 

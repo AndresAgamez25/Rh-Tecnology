@@ -1199,3 +1199,320 @@ $$;
 revoke all on function public.editar_faltante(uuid, text, text, text, text, text) from public, anon;
 grant execute on function public.editar_faltante(uuid, text, text, text, text, text) to authenticated;
 revoke all on function public.evitar_faltante_repetido() from public, anon, authenticated;
+
+
+-- ═════════════════════════════════════════════════════════════
+-- 13. GARANTÍAS
+--    Equipos que un cliente trae por garantía (teléfono, equipo de
+--    sonido u otro). La tienda los recibe, los envía al proveedor y
+--    espera la respuesta (hasta 30 días hábiles); luego se entregan.
+--    garantias          → un equipo en garantía (número interno)
+--    garantia_eventos   → historial (solo se agrega, nunca se borra)
+--    garantia_fotos     → fotos (archivo en Storage "ordenes", carpeta g/)
+--    Estados: recibida → enviada → respuesta → entregada.
+--    Las entregadas no se borran ni se modifican (solo notas).
+-- ═════════════════════════════════════════════════════════════
+create table if not exists public.garantias (
+  id                   uuid primary key default gen_random_uuid(),
+  numero               bigint generated always as identity unique,
+  estado               text not null default 'recibida' check (estado in ('recibida','enviada','respuesta','entregada')),
+  resultado            text check (resultado in ('reparado','cambio','devolucion','rechazada')),
+  cliente              text not null check (char_length(cliente) between 1 and 80),
+  cedula               text not null default '' check (char_length(cedula) <= 20),
+  telefono             text not null default '' check (char_length(telefono) <= 20),
+  tipo                 text not null default 'celular' check (tipo in ('celular','sonido','otro')),
+  tipo_otro            text not null default '' check (char_length(tipo_otro) <= 60),
+  equipo               text not null default '' check (char_length(equipo) <= 80),
+  serial               text not null default '' check (char_length(serial) <= 40),
+  fecha_compra         date,
+  valor_compra         integer not null default 0 check (valor_compra between 0 and 50000000),
+  factura              text not null default '' check (char_length(factura) <= 60),
+  falla                text not null default '' check (char_length(falla) <= 500),
+  motivo               text not null default '' check (char_length(motivo) <= 500),
+  llego_con            text[] not null default '{}',
+  llego_con_otro       text not null default '' check (char_length(llego_con_otro) <= 200),
+  estado_recibido      text[] not null default '{}',
+  estado_recibido_otro text not null default '' check (char_length(estado_recibido_otro) <= 200),
+  limite               date not null default (current_date + 42),
+  enviado_a            text not null default '' check (char_length(enviado_a) <= 80),
+  guia                 text not null default '' check (char_length(guia) <= 80),
+  enviado_en           timestamptz,
+  respuesta            text not null default '' check (char_length(respuesta) <= 500),
+  respuesta_en         timestamptz,
+  creado_en            timestamptz not null default now(),
+  creado_por           text not null default '',
+  entregado_en         timestamptz,
+  entregado_por        text
+);
+create index if not exists garantias_estado_idx on public.garantias (estado, creado_en desc);
+
+create table if not exists public.garantia_eventos (
+  id           bigint generated always as identity primary key,
+  garantia_id  uuid not null references public.garantias(id),
+  creado_en    timestamptz not null default now(),
+  autor        text not null,
+  tipo         text not null check (tipo in ('recibida','nota','enviada','respuesta','entregada','foto','whatsapp','edicion')),
+  texto        text not null default '' check (char_length(texto) <= 1000)
+);
+create index if not exists garantia_eventos_idx on public.garantia_eventos (garantia_id, id);
+
+create table if not exists public.garantia_fotos (
+  id           uuid primary key default gen_random_uuid(),
+  garantia_id  uuid not null references public.garantias(id),
+  ruta         text not null unique,
+  etiqueta     text not null default '' check (char_length(etiqueta) <= 80),
+  momento      text not null default 'recibido' check (momento in ('recibido','envio','respuesta')),
+  creado_en    timestamptz not null default now(),
+  autor        text not null,
+  borrada_en   timestamptz
+);
+create index if not exists garantia_fotos_idx on public.garantia_fotos (garantia_id);
+
+do $$
+declare t text;
+begin
+  foreach t in array array['garantias','garantia_eventos','garantia_fotos'] loop
+    execute format('alter table public.%I enable row level security', t);
+    execute format('revoke all on public.%I from anon, authenticated', t);
+    execute format('grant select on public.%I to authenticated', t);
+    execute format('drop policy if exists "leer %s" on public.%I', t, t);
+    execute format('create policy "leer %s" on public.%I for select to authenticated using ((select public.es_permitido()))', t, t);
+  end loop;
+end $$;
+
+create or replace function public.proteger_garantias()
+returns trigger language plpgsql set search_path = ''
+as $$
+begin
+  if tg_op = 'DELETE' then
+    raise exception 'Las garantías no se pueden borrar' using errcode = '42501';
+  end if;
+  if old.estado = 'entregada' then
+    raise exception 'Las garantías entregadas no se pueden modificar' using errcode = '42501';
+  end if;
+  return new;
+end;
+$$;
+drop trigger if exists garantias_proteger on public.garantias;
+create trigger garantias_proteger before update or delete on public.garantias
+  for each row execute function public.proteger_garantias();
+drop trigger if exists garantia_eventos_solo_agregar on public.garantia_eventos;
+create trigger garantia_eventos_solo_agregar before update or delete on public.garantia_eventos
+  for each row execute function public.solo_agregar();
+
+create or replace function public.garantia_para_cambiar(p_id uuid)
+returns public.garantias language plpgsql security definer set search_path = ''
+as $$
+declare g public.garantias;
+begin
+  select * into g from public.garantias where id = p_id for update;
+  if g.id is null then raise exception 'La garantía no existe' using errcode = 'P0002'; end if;
+  if g.estado = 'entregada' then
+    raise exception 'Las garantías entregadas no se pueden modificar' using errcode = '42501';
+  end if;
+  return g;
+end;
+$$;
+
+create or replace function public.evento_garantia(p_id uuid, p_autor text, p_tipo text, p_texto text)
+returns void language sql security definer set search_path = ''
+as $$
+  insert into public.garantia_eventos (garantia_id, autor, tipo, texto)
+  values (p_id, p_autor, p_tipo, left(coalesce(p_texto, ''), 1000));
+$$;
+
+create or replace function public.tipo_garantia_texto(g public.garantias)
+returns text language sql immutable set search_path = ''
+as $$
+  select coalesce(nullif(g.equipo, ''),
+    case g.tipo when 'celular' then 'un celular' when 'sonido' then 'un equipo de sonido'
+                else coalesce(nullif(g.tipo_otro, ''), 'un equipo') end);
+$$;
+
+-- ── Recibir equipo en garantía ───────────────────────────────
+-- "limite" lo calcula la app (30 días hábiles: lunes a viernes sin festivos de Colombia)
+create or replace function public.crear_garantia(d jsonb)
+returns public.garantias language plpgsql security definer set search_path = ''
+as $$
+declare
+  yo text := public.requiere_permiso();
+  g public.garantias;
+  lim date := coalesce(nullif(d ->> 'limite', '')::date, current_date + 42);
+begin
+  if lim < current_date or lim > current_date + 120 then lim := current_date + 42; end if;
+  insert into public.garantias (cliente, cedula, telefono, tipo, tipo_otro, equipo, serial, fecha_compra, valor_compra,
+                                factura, falla, motivo, llego_con, llego_con_otro, estado_recibido, estado_recibido_otro,
+                                limite, creado_por)
+  values (trim(d ->> 'cliente'), left(coalesce(d ->> 'cedula', ''), 20), left(coalesce(d ->> 'telefono', ''), 20),
+          coalesce(nullif(d ->> 'tipo', ''), 'celular'), left(coalesce(d ->> 'tipo_otro', ''), 60),
+          left(coalesce(d ->> 'equipo', ''), 80), left(coalesce(d ->> 'serial', ''), 40),
+          nullif(d ->> 'fecha_compra', '')::date, greatest(coalesce((d ->> 'valor_compra')::integer, 0), 0),
+          left(coalesce(d ->> 'factura', ''), 60), left(coalesce(d ->> 'falla', ''), 500), left(coalesce(d ->> 'motivo', ''), 500),
+          public.lista_texto(d -> 'llego_con'), left(coalesce(d ->> 'llego_con_otro', ''), 200),
+          public.lista_texto(d -> 'estado_recibido'), left(coalesce(d ->> 'estado_recibido_otro', ''), 200),
+          lim, yo)
+  returning * into g;
+  perform public.evento_garantia(g.id, yo, 'recibida',
+    'Se recibió en garantía: ' || coalesce(nullif(g.falla, ''), 'sin descripción') || '. Respuesta a más tardar el '
+    || to_char(g.limite, 'DD/MM/YYYY') || '.');
+  perform public.anotar('garantia', yo || ' recibió en garantía ' || public.tipo_garantia_texto(g) || ' de ' || g.cliente);
+  return g;
+end;
+$$;
+
+-- ── Editar datos ─────────────────────────────────────────────
+create or replace function public.actualizar_garantia(p_id uuid, d jsonb)
+returns public.garantias language plpgsql security definer set search_path = ''
+as $$
+declare yo text := public.requiere_permiso(); g public.garantias := public.garantia_para_cambiar(p_id); n public.garantias;
+begin
+  update public.garantias set
+    cliente = coalesce(nullif(trim(d ->> 'cliente'), ''), cliente),
+    cedula = left(coalesce(d ->> 'cedula', cedula), 20),
+    telefono = left(coalesce(d ->> 'telefono', telefono), 20),
+    tipo = coalesce(nullif(d ->> 'tipo', ''), tipo),
+    tipo_otro = left(coalesce(d ->> 'tipo_otro', tipo_otro), 60),
+    equipo = left(coalesce(d ->> 'equipo', equipo), 80),
+    serial = left(coalesce(d ->> 'serial', serial), 40),
+    fecha_compra = case when d ? 'fecha_compra' then nullif(d ->> 'fecha_compra', '')::date else fecha_compra end,
+    valor_compra = case when d ? 'valor_compra' then greatest(coalesce((d ->> 'valor_compra')::integer, 0), 0) else valor_compra end,
+    factura = left(coalesce(d ->> 'factura', factura), 60),
+    falla = left(coalesce(d ->> 'falla', falla), 500),
+    motivo = left(coalesce(d ->> 'motivo', motivo), 500)
+  where id = p_id returning * into n;
+  if n is distinct from g then
+    perform public.evento_garantia(p_id, yo, 'edicion', 'Se editaron los datos.');
+  end if;
+  return n;
+end;
+$$;
+
+-- ── Nota / aviso de WhatsApp (también en entregadas) ─────────
+create or replace function public.nota_garantia(p_id uuid, p_tipo text, p_texto text)
+returns void language plpgsql security definer set search_path = ''
+as $$
+declare yo text := public.requiere_permiso();
+begin
+  if not exists (select 1 from public.garantias where id = p_id) then
+    raise exception 'La garantía no existe' using errcode = 'P0002';
+  end if;
+  if p_tipo not in ('nota','whatsapp') then raise exception 'Tipo no permitido' using errcode = '22023'; end if;
+  if char_length(trim(coalesce(p_texto, ''))) < 2 then raise exception 'Escribe la nota' using errcode = '22023'; end if;
+  perform public.evento_garantia(p_id, yo, p_tipo, trim(p_texto));
+end;
+$$;
+
+-- ── Enviar al proveedor ──────────────────────────────────────
+create or replace function public.enviar_garantia(p_id uuid, p_destino text, p_guia text, p_nota text)
+returns public.garantias language plpgsql security definer set search_path = ''
+as $$
+declare yo text := public.requiere_permiso(); g public.garantias := public.garantia_para_cambiar(p_id); n public.garantias;
+begin
+  if g.estado <> 'recibida' then raise exception 'Esta garantía ya fue enviada' using errcode = '22023'; end if;
+  if char_length(trim(coalesce(p_destino, ''))) < 2 then raise exception 'Escribe a quién se envía' using errcode = '22023'; end if;
+  update public.garantias set estado = 'enviada', enviado_a = left(trim(p_destino), 80), guia = left(trim(coalesce(p_guia, '')), 80),
+         enviado_en = now()
+  where id = p_id returning * into n;
+  perform public.evento_garantia(p_id, yo, 'enviada', 'Enviado a ' || n.enviado_a
+    || case when n.guia <> '' then ' (guía/recibo: ' || n.guia || ')' else '' end
+    || case when char_length(trim(coalesce(p_nota, ''))) > 0 then '. ' || trim(p_nota) else '' end || '.');
+  return n;
+end;
+$$;
+
+-- ── Respuesta del proveedor ──────────────────────────────────
+create or replace function public.responder_garantia(p_id uuid, p_resultado text, p_detalle text)
+returns public.garantias language plpgsql security definer set search_path = ''
+as $$
+declare yo text := public.requiere_permiso(); g public.garantias := public.garantia_para_cambiar(p_id); n public.garantias;
+begin
+  if g.estado not in ('recibida','enviada') then raise exception 'Esta garantía ya tiene respuesta' using errcode = '22023'; end if;
+  if p_resultado not in ('reparado','cambio','devolucion','rechazada') then
+    raise exception 'Elige el resultado' using errcode = '22023';
+  end if;
+  update public.garantias set estado = 'respuesta', resultado = p_resultado, respuesta = left(trim(coalesce(p_detalle, '')), 500),
+         respuesta_en = now()
+  where id = p_id returning * into n;
+  perform public.evento_garantia(p_id, yo, 'respuesta', 'Respuesta: '
+    || case p_resultado when 'reparado' then 'reparado' when 'cambio' then 'cambio de equipo'
+                        when 'devolucion' then 'devolución del dinero' else 'garantía rechazada' end
+    || case when n.respuesta <> '' then '. ' || n.respuesta else '' end || '.');
+  return n;
+end;
+$$;
+
+-- ── Entregar al cliente (queda guardada para siempre) ────────
+create or replace function public.entregar_garantia(p_id uuid, p_nota text)
+returns public.garantias language plpgsql security definer set search_path = ''
+as $$
+declare yo text := public.requiere_permiso(); g public.garantias := public.garantia_para_cambiar(p_id); n public.garantias;
+begin
+  if g.estado <> 'respuesta' then raise exception 'Primero registra la respuesta de la garantía' using errcode = '22023'; end if;
+  if char_length(trim(coalesce(p_nota, ''))) > 0 then
+    perform public.evento_garantia(p_id, yo, 'nota', trim(p_nota));
+  end if;
+  update public.garantias set estado = 'entregada', entregado_en = now(), entregado_por = yo
+  where id = p_id returning * into n;
+  perform public.evento_garantia(p_id, yo, 'entregada', 'Entregado al cliente.');
+  perform public.anotar('garantia', yo || ' entregó la garantía de ' || public.tipo_garantia_texto(n) || ' a ' || n.cliente);
+  return n;
+end;
+$$;
+
+-- ── Fotos ────────────────────────────────────────────────────
+create or replace function public.foto_garantia(p_id uuid, p_ruta text, p_etiqueta text, p_momento text)
+returns public.garantia_fotos language plpgsql security definer set search_path = ''
+as $$
+declare yo text := public.requiere_permiso(); g public.garantias := public.garantia_para_cambiar(p_id); f public.garantia_fotos;
+begin
+  if p_ruta not like 'g/' || p_id::text || '/%' then raise exception 'Ruta inválida' using errcode = '22023'; end if;
+  insert into public.garantia_fotos (garantia_id, ruta, etiqueta, momento, autor)
+  values (p_id, p_ruta, left(coalesce(p_etiqueta, ''), 80), coalesce(nullif(p_momento, ''), 'recibido'), yo)
+  returning * into f;
+  perform public.evento_garantia(p_id, yo, 'foto', '📷 ' || coalesce(nullif(f.etiqueta, ''), 'Foto'));
+  return f;
+end;
+$$;
+
+-- Las fotos se guardan mientras la garantía está abierta y se borran 30 días después de entregada
+create or replace function public.marcar_fotos_garantia_borradas(p_ids uuid[])
+returns integer language plpgsql security definer set search_path = ''
+as $$
+declare n integer;
+begin
+  perform public.requiere_permiso();
+  update public.garantia_fotos f set borrada_en = now()
+  from public.garantias g
+  where f.id = any(p_ids) and f.borrada_en is null and g.id = f.garantia_id
+    and g.estado = 'entregada' and g.entregado_en < now() - interval '30 days';
+  get diagnostics n = row_count;
+  return n;
+end;
+$$;
+
+do $$
+declare f text;
+begin
+  foreach f in array array[
+    'crear_garantia(jsonb)', 'actualizar_garantia(uuid,jsonb)', 'nota_garantia(uuid,text,text)',
+    'enviar_garantia(uuid,text,text,text)', 'responder_garantia(uuid,text,text)', 'entregar_garantia(uuid,text)',
+    'foto_garantia(uuid,text,text,text)', 'marcar_fotos_garantia_borradas(uuid[])'] loop
+    execute format('revoke all on function public.%s from public, anon', f);
+    execute format('grant execute on function public.%s to authenticated', f);
+  end loop;
+  foreach f in array array['garantia_para_cambiar(uuid)', 'evento_garantia(uuid,text,text,text)'] loop
+    execute format('revoke all on function public.%s from public, anon, authenticated', f);
+  end loop;
+end $$;
+
+-- Tiempo real
+do $$
+declare t text;
+begin
+  foreach t in array array['garantias','garantia_eventos','garantia_fotos'] loop
+    if exists (select 1 from pg_publication where pubname = 'supabase_realtime')
+       and not exists (select 1 from pg_publication_tables where pubname = 'supabase_realtime' and tablename = t) then
+      execute format('alter publication supabase_realtime add table public.%I', t);
+    end if;
+  end loop;
+end $$;

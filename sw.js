@@ -44,6 +44,7 @@ const ARCHIVOS = [
   './js/garantias/datos-supabase.js',
   './js/garantias/habiles.js',
   './js/garantias/mensajes.js',
+  './js/garantias/productos.js',
   './orden.html',
   './icons/logo-rh.svg',
   './icons/logo.webp',

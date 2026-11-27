@@ -25,7 +25,7 @@ function avisar() {
 
 export async function iniciar() {
   canal = sb().channel('garantias-cambios');
-  for (const tabla of ['garantias', 'garantia_eventos', 'garantia_fotos']) {
+  for (const tabla of ['garantias', 'garantia_eventos', 'garantia_fotos', 'devoluciones', 'devolucion_eventos', 'devolucion_fotos']) {
     canal.on('postgres_changes', { event: '*', schema: 'public', table: tabla }, avisar);
   }
   canal.subscribe();
@@ -89,8 +89,58 @@ export async function limpiarFotosVencidas() {
   return rpc('marcar_fotos_garantia_borradas', { p_ids: data.map((f) => f.id) });
 }
 
+// ── Productos del local (devoluciones al proveedor) ──────────
+
+export async function listarDevoluciones() {
+  const [abiertas, resueltas] = await Promise.all([
+    sb().from('devoluciones').select('*').neq('estado', 'resuelto').order('creado_en', { ascending: false }),
+    sb().from('devoluciones').select('*').eq('estado', 'resuelto').order('resuelto_en', { ascending: false }).limit(300),
+  ]);
+  if (abiertas.error) throw abiertas.error;
+  if (resueltas.error) throw resueltas.error;
+  return [...abiertas.data, ...resueltas.data];
+}
+
+export async function detalleDevolucion(id) {
+  const [d, ev, fo] = await Promise.all([
+    sb().from('devoluciones').select('*').eq('id', id).single(),
+    sb().from('devolucion_eventos').select('*').eq('devolucion_id', id).order('id'),
+    sb().from('devolucion_fotos').select('*').eq('devolucion_id', id).order('creado_en'),
+  ]);
+  for (const r of [d, ev, fo]) if (r.error) throw r.error;
+  const vivas = fo.data.filter((f) => !f.borrada_en);
+  let urls = {};
+  if (vivas.length) {
+    const { data } = await sb().storage.from(BUCKET).createSignedUrls(vivas.map((f) => f.ruta), 3600);
+    urls = Object.fromEntries((data ?? []).filter((x) => x.signedUrl).map((x) => [x.path, x.signedUrl]));
+  }
+  return { devolucion: d.data, eventos: ev.data, fotos: fo.data.map((f) => ({ ...f, url: urls[f.ruta] ?? null })) };
+}
+
+export const crearDevolucion = (d) => rpc('crear_devolucion', { d });
+export const actualizarDevolucion = (id, d) => rpc('actualizar_devolucion', { p_id: id, d });
+export const notaDevolucion = (id, texto) => rpc('nota_devolucion', { p_id: id, p_texto: texto });
+export const marcarDevuelto = (id, notaDev) => rpc('marcar_devuelto', { p_id: id, p_nota: notaDev });
+export const resolverDevolucion = (id, resultado, detalleRes) => rpc('resolver_devolucion', { p_id: id, p_resultado: resultado, p_detalle: detalleRes });
+
+export async function subirFotoDevolucion(id, blob, etiqueta) {
+  const ruta = `d/${id}/${globalThis.crypto?.randomUUID?.() ?? Date.now()}.jpg`;
+  const { error } = await sb().storage.from(BUCKET).upload(ruta, blob, { contentType: 'image/jpeg' });
+  if (error) throw new Error(error.message);
+  return rpc('foto_devolucion', { p_id: id, p_ruta: ruta, p_etiqueta: etiqueta });
+}
+
+export async function limpiarFotosDevoluciones() {
+  const limite = new Date(Date.now() - 30 * 86_400_000).toISOString();
+  const { data, error } = await sb().from('devolucion_fotos').select('id, ruta, devoluciones!inner(estado, resuelto_en)')
+    .is('borrada_en', null).eq('devoluciones.estado', 'resuelto').lt('devoluciones.resuelto_en', limite).limit(100);
+  if (error || !data?.length) return 0;
+  await sb().storage.from(BUCKET).remove(data.map((f) => f.ruta));
+  return rpc('marcar_fotos_devolucion_borradas', { p_ids: data.map((f) => f.id) });
+}
+
 export async function copia() {
-  const tablas = ['garantias', 'garantia_eventos', 'garantia_fotos'];
+  const tablas = ['garantias', 'garantia_eventos', 'garantia_fotos', 'devoluciones', 'devolucion_eventos', 'devolucion_fotos'];
   const res = await Promise.all(tablas.map((t) => sb().from(t).select('*').limit(100000)));
   return Object.fromEntries(tablas.map((t, i) => [t, res[i].data ?? []]));
 }

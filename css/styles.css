@@ -1317,3 +1317,15 @@ select.st-input:disabled { opacity: 0.5; }
 .gr-fecha-max b { font-size: 17px; color: var(--texto); }
 .gr-fecha-max b::first-letter { text-transform: uppercase; }
 .gr-aviso-plazo { border-color: rgb(168 85 247 / 0.45); }
+
+/* Garantías: Clientes | Productos del local */
+.gr-partes { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 4px 0 8px; }
+.gr-parte {
+  display: flex; align-items: center; justify-content: center; gap: 6px;
+  min-height: 46px; padding: 0 8px;
+  border: 1px solid var(--borde); border-radius: 14px;
+  background: var(--superficie); color: var(--texto-suave); font-size: 14px; font-weight: 700;
+}
+.gr-parte.on { border-color: #a855f7; background: rgb(168 85 247 / 0.16); color: var(--texto); }
+.gr-parte .contador { background: rgb(255 255 255 / 0.12); }
+.gr-plata { margin: 6px 0 2px; color: var(--peligro); font-size: 14px; font-weight: 700; }

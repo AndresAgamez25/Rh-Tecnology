@@ -1516,3 +1516,238 @@ begin
     end if;
   end loop;
 end $$;
+
+
+-- ═════════════════════════════════════════════════════════════
+-- 14. GARANTÍAS · PRODUCTOS DEL LOCAL (devoluciones al proveedor)
+--    Productos que se prueban en la tienda y no funcionan (celular,
+--    bafle, cable, control…): se anota qué es, cuánto costó, en qué
+--    local se compró y cuándo, y se devuelven al proveedor.
+--    Estados: pendiente (en la tienda) → devuelto (lo tiene el proveedor)
+--             → resuelto (cambio, reembolso o rechazado).
+--    No se borran; los resueltos no se modifican (solo notas).
+-- ═════════════════════════════════════════════════════════════
+create table if not exists public.devoluciones (
+  id            uuid primary key default gen_random_uuid(),
+  numero        bigint generated always as identity unique,
+  estado        text not null default 'pendiente' check (estado in ('pendiente','devuelto','resuelto')),
+  resultado     text check (resultado in ('cambio','reembolso','rechazado')),
+  tipo          text not null default 'otro' check (tipo in ('celular','sonido','cable','control','cargador','audifonos','otro')),
+  producto      text not null check (char_length(producto) between 1 and 120),
+  cantidad      integer not null default 1 check (cantidad between 1 and 1000),
+  costo         integer not null default 0 check (costo between 0 and 50000000),
+  proveedor     text not null default '' check (char_length(proveedor) <= 80),
+  fecha_compra  date,
+  factura       text not null default '' check (char_length(factura) <= 60),
+  falla         text not null default '' check (char_length(falla) <= 500),
+  devuelto_en   timestamptz,
+  devuelto_nota text not null default '' check (char_length(devuelto_nota) <= 200),
+  respuesta     text not null default '' check (char_length(respuesta) <= 500),
+  resuelto_en   timestamptz,
+  creado_en     timestamptz not null default now(),
+  creado_por    text not null default ''
+);
+create index if not exists devoluciones_estado_idx on public.devoluciones (estado, creado_en desc);
+
+create table if not exists public.devolucion_eventos (
+  id             bigint generated always as identity primary key,
+  devolucion_id  uuid not null references public.devoluciones(id),
+  creado_en      timestamptz not null default now(),
+  autor          text not null,
+  tipo           text not null check (tipo in ('registrado','nota','devuelto','resuelto','foto','edicion')),
+  texto          text not null default '' check (char_length(texto) <= 1000)
+);
+create index if not exists devolucion_eventos_idx on public.devolucion_eventos (devolucion_id, id);
+
+create table if not exists public.devolucion_fotos (
+  id             uuid primary key default gen_random_uuid(),
+  devolucion_id  uuid not null references public.devoluciones(id),
+  ruta           text not null unique,
+  etiqueta       text not null default '' check (char_length(etiqueta) <= 80),
+  creado_en      timestamptz not null default now(),
+  autor          text not null,
+  borrada_en     timestamptz
+);
+create index if not exists devolucion_fotos_idx on public.devolucion_fotos (devolucion_id);
+
+do $$
+declare t text;
+begin
+  foreach t in array array['devoluciones','devolucion_eventos','devolucion_fotos'] loop
+    execute format('alter table public.%I enable row level security', t);
+    execute format('revoke all on public.%I from anon, authenticated', t);
+    execute format('grant select on public.%I to authenticated', t);
+    execute format('drop policy if exists "leer %s" on public.%I', t, t);
+    execute format('create policy "leer %s" on public.%I for select to authenticated using ((select public.es_permitido()))', t, t);
+  end loop;
+end $$;
+
+create or replace function public.proteger_devoluciones()
+returns trigger language plpgsql set search_path = ''
+as $$
+begin
+  if tg_op = 'DELETE' then raise exception 'Las devoluciones no se pueden borrar' using errcode = '42501'; end if;
+  if old.estado = 'resuelto' then raise exception 'Las devoluciones resueltas no se pueden modificar' using errcode = '42501'; end if;
+  return new;
+end;
+$$;
+drop trigger if exists devoluciones_proteger on public.devoluciones;
+create trigger devoluciones_proteger before update or delete on public.devoluciones
+  for each row execute function public.proteger_devoluciones();
+drop trigger if exists devolucion_eventos_solo_agregar on public.devolucion_eventos;
+create trigger devolucion_eventos_solo_agregar before update or delete on public.devolucion_eventos
+  for each row execute function public.solo_agregar();
+
+create or replace function public.devolucion_para_cambiar(p_id uuid)
+returns public.devoluciones language plpgsql security definer set search_path = ''
+as $$
+declare d public.devoluciones;
+begin
+  select * into d from public.devoluciones where id = p_id for update;
+  if d.id is null then raise exception 'La devolución no existe' using errcode = 'P0002'; end if;
+  if d.estado = 'resuelto' then raise exception 'Las devoluciones resueltas no se pueden modificar' using errcode = '42501'; end if;
+  return d;
+end;
+$$;
+
+create or replace function public.evento_devolucion(p_id uuid, p_autor text, p_tipo text, p_texto text)
+returns void language sql security definer set search_path = ''
+as $$
+  insert into public.devolucion_eventos (devolucion_id, autor, tipo, texto) values (p_id, p_autor, p_tipo, left(coalesce(p_texto, ''), 1000));
+$$;
+
+create or replace function public.crear_devolucion(d jsonb)
+returns public.devoluciones language plpgsql security definer set search_path = ''
+as $$
+declare yo text := public.requiere_permiso(); n public.devoluciones;
+begin
+  insert into public.devoluciones (tipo, producto, cantidad, costo, proveedor, fecha_compra, factura, falla, creado_por)
+  values (coalesce(nullif(d ->> 'tipo', ''), 'otro'), left(trim(d ->> 'producto'), 120),
+          greatest(coalesce((d ->> 'cantidad')::integer, 1), 1), greatest(coalesce((d ->> 'costo')::integer, 0), 0),
+          left(trim(coalesce(d ->> 'proveedor', '')), 80), nullif(d ->> 'fecha_compra', '')::date,
+          left(coalesce(d ->> 'factura', ''), 60), left(coalesce(d ->> 'falla', ''), 500), yo)
+  returning * into n;
+  perform public.evento_devolucion(n.id, yo, 'registrado', 'Se registró: ' || coalesce(nullif(n.falla, ''), 'no funciona')
+    || '. ' || n.cantidad || ' × ' || public.pesos(n.costo) || case when n.proveedor <> '' then ', comprado en ' || n.proveedor else '' end || '.');
+  perform public.anotar('garantia', yo || ' registró para devolver: ' || n.producto
+    || case when n.cantidad > 1 then ' (×' || n.cantidad || ')' else '' end);
+  return n;
+end;
+$$;
+
+create or replace function public.actualizar_devolucion(p_id uuid, d jsonb)
+returns public.devoluciones language plpgsql security definer set search_path = ''
+as $$
+declare yo text := public.requiere_permiso(); a public.devoluciones := public.devolucion_para_cambiar(p_id); n public.devoluciones;
+begin
+  update public.devoluciones set
+    tipo = coalesce(nullif(d ->> 'tipo', ''), tipo),
+    producto = coalesce(nullif(left(trim(d ->> 'producto'), 120), ''), producto),
+    cantidad = case when d ? 'cantidad' then greatest(coalesce((d ->> 'cantidad')::integer, 1), 1) else cantidad end,
+    costo = case when d ? 'costo' then greatest(coalesce((d ->> 'costo')::integer, 0), 0) else costo end,
+    proveedor = left(coalesce(d ->> 'proveedor', proveedor), 80),
+    fecha_compra = case when d ? 'fecha_compra' then nullif(d ->> 'fecha_compra', '')::date else fecha_compra end,
+    factura = left(coalesce(d ->> 'factura', factura), 60),
+    falla = left(coalesce(d ->> 'falla', falla), 500)
+  where id = p_id returning * into n;
+  if n is distinct from a then perform public.evento_devolucion(p_id, yo, 'edicion', 'Se editaron los datos.'); end if;
+  return n;
+end;
+$$;
+
+create or replace function public.nota_devolucion(p_id uuid, p_texto text)
+returns void language plpgsql security definer set search_path = ''
+as $$
+declare yo text := public.requiere_permiso();
+begin
+  if not exists (select 1 from public.devoluciones where id = p_id) then raise exception 'La devolución no existe' using errcode = 'P0002'; end if;
+  if char_length(trim(coalesce(p_texto, ''))) < 2 then raise exception 'Escribe la nota' using errcode = '22023'; end if;
+  perform public.evento_devolucion(p_id, yo, 'nota', trim(p_texto));
+end;
+$$;
+
+create or replace function public.marcar_devuelto(p_id uuid, p_nota text)
+returns public.devoluciones language plpgsql security definer set search_path = ''
+as $$
+declare yo text := public.requiere_permiso(); a public.devoluciones := public.devolucion_para_cambiar(p_id); n public.devoluciones;
+begin
+  if a.estado <> 'pendiente' then raise exception 'Ya se devolvió' using errcode = '22023'; end if;
+  update public.devoluciones set estado = 'devuelto', devuelto_en = now(), devuelto_nota = left(trim(coalesce(p_nota, '')), 200)
+  where id = p_id returning * into n;
+  perform public.evento_devolucion(p_id, yo, 'devuelto', 'Se devolvió' || case when n.proveedor <> '' then ' a ' || n.proveedor else '' end
+    || case when n.devuelto_nota <> '' then '. ' || n.devuelto_nota else '' end || '.');
+  return n;
+end;
+$$;
+
+create or replace function public.resolver_devolucion(p_id uuid, p_resultado text, p_detalle text)
+returns public.devoluciones language plpgsql security definer set search_path = ''
+as $$
+declare yo text := public.requiere_permiso(); a public.devoluciones := public.devolucion_para_cambiar(p_id); n public.devoluciones;
+begin
+  if p_resultado not in ('cambio','reembolso','rechazado') then raise exception 'Elige cómo se resolvió' using errcode = '22023'; end if;
+  update public.devoluciones set estado = 'resuelto', resultado = p_resultado, respuesta = left(trim(coalesce(p_detalle, '')), 500),
+         resuelto_en = now(), devuelto_en = coalesce(devuelto_en, now())
+  where id = p_id returning * into n;
+  perform public.evento_devolucion(p_id, yo, 'resuelto', 'Resuelto: '
+    || case p_resultado when 'cambio' then 'el proveedor lo cambió' when 'reembolso' then 'el proveedor devolvió el dinero'
+       else 'el proveedor no lo aceptó' end || case when n.respuesta <> '' then '. ' || n.respuesta else '' end || '.');
+  perform public.anotar('garantia', yo || ' cerró la devolución de ' || n.producto || ': '
+    || case p_resultado when 'cambio' then 'cambio' when 'reembolso' then 'reembolso' else 'rechazado' end);
+  return n;
+end;
+$$;
+
+create or replace function public.foto_devolucion(p_id uuid, p_ruta text, p_etiqueta text)
+returns public.devolucion_fotos language plpgsql security definer set search_path = ''
+as $$
+declare yo text := public.requiere_permiso(); a public.devoluciones := public.devolucion_para_cambiar(p_id); f public.devolucion_fotos;
+begin
+  if p_ruta not like 'd/' || p_id::text || '/%' then raise exception 'Ruta inválida' using errcode = '22023'; end if;
+  insert into public.devolucion_fotos (devolucion_id, ruta, etiqueta, autor) values (p_id, p_ruta, left(coalesce(p_etiqueta, ''), 80), yo)
+  returning * into f;
+  perform public.evento_devolucion(p_id, yo, 'foto', '📷 ' || coalesce(nullif(f.etiqueta, ''), 'Foto'));
+  return f;
+end;
+$$;
+
+-- Fotos: se borran 30 días después de resuelta
+create or replace function public.marcar_fotos_devolucion_borradas(p_ids uuid[])
+returns integer language plpgsql security definer set search_path = ''
+as $$
+declare n integer;
+begin
+  perform public.requiere_permiso();
+  update public.devolucion_fotos f set borrada_en = now()
+  from public.devoluciones d
+  where f.id = any(p_ids) and f.borrada_en is null and d.id = f.devolucion_id
+    and d.estado = 'resuelto' and d.resuelto_en < now() - interval '30 days';
+  get diagnostics n = row_count;
+  return n;
+end;
+$$;
+
+do $$
+declare f text;
+begin
+  foreach f in array array['crear_devolucion(jsonb)', 'actualizar_devolucion(uuid,jsonb)', 'nota_devolucion(uuid,text)',
+    'marcar_devuelto(uuid,text)', 'resolver_devolucion(uuid,text,text)', 'foto_devolucion(uuid,text,text)',
+    'marcar_fotos_devolucion_borradas(uuid[])'] loop
+    execute format('revoke all on function public.%s from public, anon', f);
+    execute format('grant execute on function public.%s to authenticated', f);
+  end loop;
+  foreach f in array array['devolucion_para_cambiar(uuid)', 'evento_devolucion(uuid,text,text,text)'] loop
+    execute format('revoke all on function public.%s from public, anon, authenticated', f);
+  end loop;
+end $$;
+
+do $$
+declare t text;
+begin
+  foreach t in array array['devoluciones','devolucion_eventos','devolucion_fotos'] loop
+    if exists (select 1 from pg_publication where pubname = 'supabase_realtime')
+       and not exists (select 1 from pg_publication_tables where pubname = 'supabase_realtime' and tablename = t) then
+      execute format('alter publication supabase_realtime add table public.%I', t);
+    end if;
+  end loop;
+end $$;

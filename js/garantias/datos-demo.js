@@ -43,13 +43,27 @@ function semilla() {
     equipo: 'Xiaomi Smart Band 8', fecha_compra: aISO(hace(90)), valor_compra: 180000, falla: 'La pantalla no prende', estado: 'respuesta',
     resultado: 'cambio', respuesta: 'Llegó una manilla nueva', respuesta_en: hace(1).toISOString(), enviado_a: 'Proveedor Xiaomi' }, 25);
   base.eventos.push({ id: 91, garantia_id: r.id, creado_en: r.respuesta_en, autor: 'Andrés', tipo: 'respuesta', texto: 'Respuesta: cambio de equipo. Llegó una manilla nueva.' });
+  const dv = (d, diasAtras) => {
+    base.numero += 1;
+    const x = { id: nuevoId(), numero: base.numero, estado: 'pendiente', resultado: null, tipo: 'otro', cantidad: 1, costo: 0, proveedor: '',
+      fecha_compra: null, factura: '', falla: '', devuelto_en: null, devuelto_nota: '', respuesta: '', resuelto_en: null,
+      creado_en: hace(diasAtras).toISOString(), creado_por: 'Osman', ...d };
+    base.devoluciones.push(x);
+    base.devEventos.push({ id: base.devEventos.length + 1, devolucion_id: x.id, creado_en: x.creado_en, autor: x.creado_por, tipo: 'registrado',
+      texto: `Se registró: ${x.falla}.` });
+    return x;
+  };
+  base.devoluciones = []; base.devEventos = []; base.devFotos = [];
+  dv({ tipo: 'cable', producto: 'Cable USB-C 1 m', cantidad: 3, costo: 6000, proveedor: 'Mayorista El Centro', fecha_compra: aISO(hace(6)), falla: 'No cargan' }, 2);
+  dv({ tipo: 'sonido', producto: 'Bafle KTS 8"', costo: 95000, proveedor: 'Importadora Sincelejo', fecha_compra: aISO(hace(12)), falla: 'No prende el bluetooth',
+    estado: 'devuelto', devuelto_en: hace(3).toISOString(), devuelto_nota: 'Lo recibió el vendedor' }, 8);
   return base;
 }
 
 function cargar() {
   try {
     const g = JSON.parse(localStorage.getItem(CLAVE) || 'null');
-    if (g?.garantias) return g;
+    if (g?.garantias && g.devoluciones) return g;
   } catch { /* sin almacenamiento */ }
   return semilla();
 }
@@ -57,7 +71,7 @@ function cargar() {
 let db = cargar();
 
 function guardar() {
-  try { localStorage.setItem(CLAVE, JSON.stringify({ ...db, fotos: db.fotos.map(({ url, ...f }) => f) })); } catch { /* lleno */ }
+  try { localStorage.setItem(CLAVE, JSON.stringify({ ...db, fotos: db.fotos.map(({ url, ...f }) => f), devFotos: db.devFotos.map(({ url, ...f }) => f) })); } catch { /* lleno */ }
   oyentes.forEach((fn) => fn());
 }
 
@@ -158,6 +172,86 @@ export async function subirFoto(id, blob, etiqueta, momento) {
 
 export async function limpiarFotosVencidas() { return 0; }
 
+// ── Productos del local (devoluciones al proveedor) ──────────
+const RESUELTO = { cambio: 'el proveedor lo cambió', reembolso: 'el proveedor devolvió el dinero', rechazado: 'el proveedor no lo aceptó' };
+const buscarDev = (id) => db.devoluciones.find((d) => d.id === id);
+function devParaCambiar(id) {
+  const d = buscarDev(id);
+  if (!d) throw new Error('La devolución no existe');
+  if (d.estado === 'resuelto') throw new Error('Las devoluciones resueltas no se pueden modificar');
+  return d;
+}
+const eventoDev = (id, tipo, texto) => db.devEventos.push({ id: Date.now() + Math.random(), devolucion_id: id, creado_en: ahora(), autor: YO, tipo, texto });
+
+export async function listarDevoluciones() { return db.devoluciones.map((d) => ({ ...d })); }
+
+export async function detalleDevolucion(id) {
+  const d = buscarDev(id);
+  if (!d) throw new Error('La devolución no existe');
+  return { devolucion: { ...d }, eventos: db.devEventos.filter((e) => e.devolucion_id === id).sort((a, b) => a.creado_en.localeCompare(b.creado_en)),
+    fotos: db.devFotos.filter((f) => f.devolucion_id === id) };
+}
+
+export async function crearDevolucion(d) {
+  if (!d.producto?.trim()) throw new Error('Escribe qué producto es');
+  db.numero += 1;
+  const x = { id: nuevoId(), numero: db.numero, estado: 'pendiente', resultado: null, tipo: d.tipo || 'otro', producto: d.producto.trim(),
+    cantidad: Math.max(1, Number(d.cantidad) || 1), costo: Math.max(0, Number(d.costo) || 0), proveedor: (d.proveedor ?? '').trim(),
+    fecha_compra: d.fecha_compra || null, factura: d.factura ?? '', falla: d.falla ?? '', devuelto_en: null, devuelto_nota: '', respuesta: '',
+    resuelto_en: null, creado_en: ahora(), creado_por: YO };
+  db.devoluciones.push(x);
+  eventoDev(x.id, 'registrado', `Se registró: ${x.falla || 'no funciona'}. ${x.cantidad} × $${x.costo.toLocaleString('es-CO')}${x.proveedor ? `, comprado en ${x.proveedor}` : ''}.`);
+  guardar();
+  return { ...x };
+}
+
+export async function actualizarDevolucion(id, d) {
+  const x = devParaCambiar(id);
+  const campos = ['tipo', 'producto', 'cantidad', 'costo', 'proveedor', 'fecha_compra', 'factura', 'falla'];
+  Object.assign(x, Object.fromEntries(Object.entries(d).filter(([k]) => campos.includes(k))));
+  eventoDev(id, 'edicion', 'Se editaron los datos.');
+  guardar();
+  return { ...x };
+}
+
+export async function notaDevolucion(id, texto) {
+  if (!buscarDev(id)) throw new Error('La devolución no existe');
+  if ((texto ?? '').trim().length < 2) throw new Error('Escribe la nota');
+  eventoDev(id, 'nota', texto.trim());
+  guardar();
+}
+
+export async function marcarDevuelto(id, notaDev) {
+  const x = devParaCambiar(id);
+  if (x.estado !== 'pendiente') throw new Error('Ya se devolvió');
+  Object.assign(x, { estado: 'devuelto', devuelto_en: ahora(), devuelto_nota: (notaDev ?? '').trim() });
+  eventoDev(id, 'devuelto', `Se devolvió${x.proveedor ? ` a ${x.proveedor}` : ''}${x.devuelto_nota ? `. ${x.devuelto_nota}` : ''}.`);
+  guardar();
+  return { ...x };
+}
+
+export async function resolverDevolucion(id, resultado, detalleRes) {
+  const x = devParaCambiar(id);
+  if (!RESUELTO[resultado]) throw new Error('Elige cómo se resolvió');
+  Object.assign(x, { estado: 'resuelto', resultado, respuesta: (detalleRes ?? '').trim(), resuelto_en: ahora(), devuelto_en: x.devuelto_en ?? ahora() });
+  eventoDev(id, 'resuelto', `Resuelto: ${RESUELTO[resultado]}${x.respuesta ? `. ${x.respuesta}` : ''}.`);
+  guardar();
+  return { ...x };
+}
+
+export async function subirFotoDevolucion(id, blob, etiqueta) {
+  devParaCambiar(id);
+  const url = await new Promise((r) => { const l = new FileReader(); l.onload = () => r(l.result); l.readAsDataURL(blob); });
+  const f = { id: nuevoId(), devolucion_id: id, ruta: `d/${id}/${nuevoId()}.jpg`, etiqueta, creado_en: ahora(), autor: YO, borrada_en: null, url };
+  db.devFotos.push(f);
+  eventoDev(id, 'foto', `📷 ${etiqueta || 'Foto'}`);
+  oyentes.forEach((fn) => fn());
+  return f;
+}
+
+export async function limpiarFotosDevoluciones() { return 0; }
+
 export async function copia() {
-  return { garantias: db.garantias, garantia_eventos: db.eventos, garantia_fotos: db.fotos.map(({ url, ...f }) => f) };
+  return { garantias: db.garantias, garantia_eventos: db.eventos, garantia_fotos: db.fotos.map(({ url, ...f }) => f),
+    devoluciones: db.devoluciones, devolucion_eventos: db.devEventos, devolucion_fotos: db.devFotos.map(({ url, ...f }) => f) };
 }

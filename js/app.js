@@ -166,7 +166,8 @@ function dibujarInicio() {
     el('div', { class: 'inicio-tarjetas' },
       tarjeta('📋', 'Faltantes', pendientes ? `${pendientes} por comprar` : 'Todo al día', 'inicio-faltantes', () => irA('faltantes')),
       tarjeta('🔧', 'Servicio técnico', `${activos} en el taller · ${porEntregar} por entregar`, 'inicio-servicio', () => irA('servicio')),
-      tarjeta('🛡️', 'Garantías', `${g.tramite} en trámite · ${g.respuesta} con respuesta${g.vencidas ? ` · ⚠️ ${g.vencidas} pasaron el plazo` : ''}`,
+      tarjeta('🛡️', 'Garantías', `Clientes: ${g.tramite} en trámite · ${g.respuesta} con respuesta${g.vencidas ? ` · ⚠️ ${g.vencidas} pasaron el plazo` : ''}`
+        + ` · Productos por devolver: ${g.porDevolver}`,
         'inicio-garantias', () => irA('garantias'))),
   );
 }

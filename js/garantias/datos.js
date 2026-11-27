@@ -27,4 +27,14 @@ export const entregar = (id, notaEntrega) => f().entregar(id, notaEntrega);
 export const subirFoto = (id, blob, etiqueta, momento) => f().subirFoto(id, blob, etiqueta, momento);
 export const limpiarFotosVencidas = () => f().limpiarFotosVencidas();
 export const copia = () => f().copia();
+// Productos del local (devoluciones al proveedor)
+export const listarDevoluciones = () => f().listarDevoluciones();
+export const detalleDevolucion = (id) => f().detalleDevolucion(id);
+export const crearDevolucion = (d) => f().crearDevolucion(d);
+export const actualizarDevolucion = (id, d) => f().actualizarDevolucion(id, d);
+export const notaDevolucion = (id, texto) => f().notaDevolucion(id, texto);
+export const marcarDevuelto = (id, nota) => f().marcarDevuelto(id, nota);
+export const resolverDevolucion = (id, resultado, detalle) => f().resolverDevolucion(id, resultado, detalle);
+export const subirFotoDevolucion = (id, blob, etiqueta) => f().subirFotoDevolucion(id, blob, etiqueta);
+export const limpiarFotosDevoluciones = () => f().limpiarFotosDevoluciones();
 export const listo = () => Boolean(fuente);

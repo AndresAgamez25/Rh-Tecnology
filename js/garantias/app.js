@@ -4,6 +4,8 @@
 // Ficha: cliente (cédula), equipo, compra, falla, fotos, historial y
 // el conteo de los 30 días hábiles de respuesta.
 // Flujo: Recibir → Enviar al proveedor → Registrar respuesta → Entregar.
+// Arriba hay dos partes: 👥 Clientes (este archivo) y 🏪 Productos del local
+// (productos que salen malos al probarlos y se devuelven: js/garantias/productos.js).
 // SEGURIDAD: todo texto se pinta con textContent (vía el()).
 // ─────────────────────────────────────────────────────────────
 import { el, toast, confirmar } from '../ui.js';
@@ -14,6 +16,7 @@ import { abrirWhatsApp, pesos } from '../servicio/whatsapp.js';
 import { prepararFoto } from '../media.js';
 import { DIAS_GARANTIA, sumarHabiles, habilesEntre, aISO, deISO } from './habiles.js';
 import { TIPOS, nombreEquipo, mensajeRecibida, mensajeRespuesta, mensajeEntregada } from './mensajes.js';
+import * as P from './productos.js';
 
 const ICONO = { celular: '📱', sonido: '🔊', otro: '📦' };
 // Lo que suele traer cada tipo de equipo (más "Otro" para escribir)
@@ -33,7 +36,9 @@ const RESULTADOS = {
 const MOMENTOS = { recibido: 'Cómo llegó', envio: 'Al enviar', respuesta: 'Al volver' };
 
 const est = { modo: 'demo', contenedor: null, onInicio: null, onCambio: null, lista: [], tab: 'tramite', busqueda: '',
-  vista: 'lista', id: null, detalle: null, visible: false, suscrito: false };
+  vista: 'lista', id: null, detalle: null, visible: false, suscrito: false,
+  parte: 'clientes', // 'clientes' | 'productos'
+  devoluciones: [] };
 
 const fechaCorta = new Intl.DateTimeFormat('es-CO', { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' });
 const soloFecha = new Intl.DateTimeFormat('es-CO', { day: 'numeric', month: 'short', year: 'numeric' });
@@ -54,14 +59,17 @@ export function contar() {
     tramite: est.lista.filter((g) => g.estado === 'recibida' || g.estado === 'enviada').length,
     respuesta: est.lista.filter((g) => g.estado === 'respuesta').length,
     vencidas: est.lista.filter((g) => (g.estado === 'recibida' || g.estado === 'enviada') && deISO(g.limite) < hoy()).length,
+    porDevolver: P.contarProductos(est.devoluciones).porDevolver,
   };
 }
 
 export async function mostrar() {
   est.visible = true;
   est.vista = 'lista';
+  P.irALista();
   render();
   datos.limpiarFotosVencidas().catch((e) => console.warn('fotos garantías:', e));
+  datos.limpiarFotosDevoluciones().catch((e) => console.warn('fotos devoluciones:', e));
   await recargar();
 }
 export function ocultar() { est.visible = false; }
@@ -69,8 +77,9 @@ export async function datosParaCopia() { return datos.listo() ? datos.copia() : 
 
 async function recargar() {
   try {
-    est.lista = await datos.listar();
+    [est.lista, est.devoluciones] = await Promise.all([datos.listar(), datos.listarDevoluciones()]);
     if (est.vista === 'ficha' && est.id) est.detalle = await datos.detalle(est.id);
+    if (P.idActual()) P.ponerDetalle(await datos.detalleDevolucion(P.idActual()));
   } catch (error) {
     console.error('garantías:', error);
   }
@@ -78,8 +87,41 @@ async function recargar() {
   if (est.visible && est.vista !== 'recibir') render();
 }
 
+// Lo que la parte de productos necesita de este archivo
+const ctx = {
+  render: () => render(),
+  recargar: () => recargar(),
+  contenedor: () => est.contenedor,
+  devoluciones: () => est.devoluciones,
+  encabezado: (...a) => encabezado(...a),
+  botonFoto: (...a) => botonFoto(...a),
+  aBlob: (a) => aBlob(a),
+  trabajar: (...a) => trabajar(...a),
+};
+
+function selectorParte() {
+  const c = contar();
+  const boton = (id, texto, n) => el('button', {
+    type: 'button', class: `gr-parte ${est.parte === id ? 'on' : ''}`, 'aria-pressed': String(est.parte === id),
+    onclick: () => { est.parte = id; render(); window.scrollTo({ top: 0 }); },
+  }, texto, n ? el('span', { class: 'contador', text: String(n) }) : null);
+  return el('div', { class: 'gr-partes' },
+    boton('clientes', '👥 Clientes', c.tramite + c.respuesta),
+    boton('productos', '🏪 Productos del local', c.porDevolver));
+}
+
 function render() {
   if (!est.contenedor || est.vista === 'recibir') return;
+  if (est.parte === 'productos') {
+    if (P.vistaActual() === 'formulario') return; // el formulario se maneja solo
+    if (P.vistaActual() === 'ficha' && P.idActual()) { est.contenedor.replaceChildren(...P.vistaFichaProductos(ctx)); return; }
+    const c = P.contarProductos(est.devoluciones);
+    est.contenedor.replaceChildren(
+      encabezado('🛡️ Garantías', `${c.porDevolver} por devolver · ${c.devueltos} devueltos`, () => est.onInicio?.()),
+      el('div', { class: 'st-cuerpo lista' }, selectorParte(), ...P.vistaListaProductos(ctx, est.devoluciones).filter(Boolean)),
+      el('button', { type: 'button', class: 'st-fab', onclick: () => P.abrirFormulario(ctx) }, '＋ Producto para devolver'));
+    return;
+  }
   if (est.vista === 'ficha' && est.detalle) est.contenedor.replaceChildren(...vistaFicha(est.detalle));
   else est.contenedor.replaceChildren(...vistaLista());
 }
@@ -152,6 +194,7 @@ function vistaLista() {
   return [
     encabezado('🛡️ Garantías', `${tramite.length} en trámite · ${respuesta.length} con respuesta`, () => est.onInicio?.()),
     el('div', { class: 'st-cuerpo lista' },
+      selectorParte(),
       buscador,
       el('div', { class: 'segmentos segmentos-3', role: 'tablist' },
         pestana('tramite', 'En trámite', tramite.length),

@@ -789,13 +789,13 @@ begin
   if n.claves is distinct from o.claves then
     perform public.evento(p_id, yo, 'clave', coalesce(nullif(d ->> 'nota_clave', ''), 'Se actualizaron las claves.'));
   end if;
-  if n.cliente is distinct from o.cliente then cambios := cambios || 'cliente'; end if;
-  if n.telefono is distinct from o.telefono then cambios := cambios || 'teléfono'; end if;
-  if n.equipo is distinct from o.equipo then cambios := cambios || 'equipo'; end if;
-  if n.imei is distinct from o.imei then cambios := cambios || 'IMEI'; end if;
-  if n.problema is distinct from o.problema then cambios := cambios || 'problema'; end if;
-  if n.llego_con is distinct from o.llego_con or n.llego_con_otro is distinct from o.llego_con_otro then cambios := cambios || 'llegó con'; end if;
-  if n.estado_recibido is distinct from o.estado_recibido or n.estado_recibido_otro is distinct from o.estado_recibido_otro then cambios := cambios || 'estado al recibir'; end if;
+  if n.cliente is distinct from o.cliente then cambios := array_append(cambios, 'cliente'::text); end if;
+  if n.telefono is distinct from o.telefono then cambios := array_append(cambios, 'teléfono'::text); end if;
+  if n.equipo is distinct from o.equipo then cambios := array_append(cambios, 'equipo'::text); end if;
+  if n.imei is distinct from o.imei then cambios := array_append(cambios, 'IMEI'::text); end if;
+  if n.problema is distinct from o.problema then cambios := array_append(cambios, 'problema'::text); end if;
+  if n.llego_con is distinct from o.llego_con or n.llego_con_otro is distinct from o.llego_con_otro then cambios := array_append(cambios, 'llegó con'::text); end if;
+  if n.estado_recibido is distinct from o.estado_recibido or n.estado_recibido_otro is distinct from o.estado_recibido_otro then cambios := array_append(cambios, 'estado al recibir'::text); end if;
   if array_length(cambios, 1) > 0 then
     perform public.evento(p_id, yo, 'edicion', 'Se editó: ' || array_to_string(cambios, ', ') || '.');
   end if;

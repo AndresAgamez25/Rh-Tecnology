@@ -131,7 +131,10 @@ export async function actualizarOrden(id, d) {
   if (d.claves && JSON.stringify(d.claves) !== JSON.stringify(o.claves)) evento(id, 'clave', d.nota_clave || 'Se actualizaron las claves.');
   const campos = ['cliente', 'telefono', 'equipo', 'imei', 'problema', 'llego_con', 'llego_con_otro', 'estado_recibido', 'estado_recibido_otro'];
   const cambiados = campos.filter((c) => c in d && JSON.stringify(d[c]) !== JSON.stringify(o[c]));
-  if (cambiados.length) evento(id, 'edicion', `Se editó: ${cambiados.join(', ')}.`);
+  const nombres = { cliente: 'cliente', telefono: 'teléfono', equipo: 'equipo', imei: 'IMEI', problema: 'problema',
+    llego_con: 'llegó con', llego_con_otro: 'llegó con', estado_recibido: 'estado al recibir', estado_recibido_otro: 'estado al recibir' };
+  const lista = [...new Set(cambiados.map((c) => nombres[c]))];
+  if (lista.length) evento(id, 'edicion', `Se editó: ${lista.join(', ')}.`);
   Object.assign(o, Object.fromEntries(Object.entries(d).filter(([k]) => [...campos, 'tecnico', 'claves'].includes(k))));
   guardar();
   return { ...o };

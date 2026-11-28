@@ -532,11 +532,29 @@ async function editarDatos(o) {
       equipo: campoTexto('Equipo', { value: o.equipo }), imei: campoTexto('IMEI', { value: o.imei }),
       problema: campoTexto('Problema', { value: o.problema, multilinea: true }),
     };
+    const otros = {
+      llego_con_otro: campoTexto('Llegó con · otro (escribe)', { value: o.llego_con_otro, placeholder: 'Ej: llavero' }),
+      estado_recibido_otro: campoTexto('Estado al recibir · otro (escribe)', { value: o.estado_recibido_otro, placeholder: 'Ej: tapa despegada' }),
+    };
     let tecnico = o.tecnico;
+    // Si antes se guardó algo que ya no está en las opciones, igual se muestra para poder quitarlo
+    let llegoCon = [...(o.llego_con ?? [])];
+    let estadoRecibido = [...(o.estado_recibido ?? [])];
+    const opcionesLlego = [...new Set([...LLEGO_CON, ...llegoCon])];
+    const opcionesEstado = [...new Set([...ESTADO_RECIBIDO, ...estadoRecibido])];
+    const texto = (x) => Object.fromEntries(Object.entries(x).map(([k, v]) => [k, v.entrada.value.trim()]));
     return [...Object.values(c).map((x) => x.nodo),
       el('span', { class: 'st-etiqueta', text: 'Técnico' }),
       selectorUnico(TECNICOS.map((t) => [t, `🔧 ${t}`]), tecnico, (v) => { tecnico = v; }),
-      botonesHoja(cerrar, 'Guardar', () => cerrar({ ...Object.fromEntries(Object.entries(c).map(([k, x]) => [k, x.entrada.value.trim()])), tecnico }))];
+      el('span', { class: 'st-etiqueta', text: 'Llegó con' }),
+      selectorVarios(opcionesLlego, llegoCon, (v) => { llegoCon = v; }), otros.llego_con_otro.nodo,
+      el('span', { class: 'st-etiqueta', text: 'Estado al recibir' }),
+      selectorVarios(opcionesEstado, estadoRecibido, (v) => { estadoRecibido = v; }), otros.estado_recibido_otro.nodo,
+      botonesHoja(cerrar, 'Guardar', () => {
+        const d = texto(c);
+        if (!d.cliente) { toast('Escribe el nombre del cliente'); return; }
+        cerrar({ ...d, ...texto(otros), tecnico, llego_con: llegoCon, estado_recibido: estadoRecibido });
+      })];
   });
   if (r) await trabajar(datos.actualizarOrden(o.id, r), '✏️ Datos actualizados');
 }
